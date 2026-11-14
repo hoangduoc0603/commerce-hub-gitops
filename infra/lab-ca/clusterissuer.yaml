@@ -1,0 +1,11 @@
+# Issuer của mọi chứng chỉ trong lab (ADR-0014): kiểu CA, ký bằng intermediate trong Secret lab-intermediate-ca.
+# ClusterIssuer đọc Secret ở "cluster resource namespace" (mặc định namespace của cert-manager).
+# cert-manager KHÔNG kiểm SAN theo name constraints lúc cấp: chứng chỉ sai vẫn được cấp, chỉ client từ chối (bằng
+# chứng ở bước 7 của G0-06). https://cert-manager.io/docs/configuration/ca/
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: lab-ca
+spec:
+  ca:
+    secretName: lab-intermediate-ca

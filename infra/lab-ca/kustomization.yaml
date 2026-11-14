@@ -1,0 +1,20 @@
+# PKI trong cụm (ADR-0014): intermediate CA dạng SealedSecret và ClusterIssuer lab-ca dùng nó.
+# Chuẩn: docs/standards/cluster-entry.md mục "PKI và cert-manager".
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  # Sinh bằng platform/scripts/lab-ca/make-intermediate.sh (khóa root offline trên Mac), KHÔNG sửa tay.
+  # Xoay: chạy lại với --replace, commit, rồi `cmctl renew` mọi Certificate của lab-ca.
+  - lab-intermediate-ca.sealedsecret.yaml
+  - clusterissuer.yaml
+patches:
+  # Wave -1 trong app (gitops-argocd.md): Secret có trước ClusterIssuer, issuer khỏi báo lỗi "secret not found" lúc đầu.
+  - target:
+      kind: SealedSecret
+    patch: |-
+      apiVersion: bitnami.com/v1alpha1
+      kind: SealedSecret
+      metadata:
+        name: any
+        annotations:
+          argocd.argoproj.io/sync-wave: "-1"
