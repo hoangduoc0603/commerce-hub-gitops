@@ -1,0 +1,8 @@
+# Namespace thứ hai của sandbox G0-04 (bước 5): đích của SealedSecret chép sang để thử scope strict.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sandbox-b
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.37
