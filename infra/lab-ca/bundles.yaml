@@ -5,14 +5,19 @@
 #
 # namespaceSelector luôn theo nhãn, KHÔNG để trống: selector rỗng đồng bộ ra mọi namespace, và docs báo bản sau sẽ đổi
 # nghĩa thành "chỉ trust namespace" (đổi hành vi âm thầm khi nâng cấp).
+# Prune=false (review G0-07): xóa Bundle thì trust-manager xóa ConfigMap đích ở MỌI namespace; pod restart sau đó kẹt
+# ContainerCreating vì volume trust không optional. Commit lỡ làm mất file này không được kéo theo cả cụm. Gỡ Bundle thật
+# thì xóa tay sau khi bỏ khỏi Git.
 
-# lab-trust: cho JVM (và Envoy BackendTLSPolicy ở G0-10). Truststore toàn JVM THAY THẾ cacerts của JDK, nên phải gồm cả
+# lab-trust: cho JVM. Truststore toàn JVM THAY THẾ cacerts của JDK, nên phải gồm cả
 # CA công khai (useDefaultCAs: gói ca-certificates Debian 13 trong init container của trust-manager) cộng root lab.
 # Chart app mount vào /etc/trust/ và đặt -Djavax.net.ssl.trustStore=/etc/trust/bundle.p12 -Djavax.net.ssl.trustStoreType=PKCS12.
 apiVersion: trust.cert-manager.io/v1alpha1
 kind: Bundle
 metadata:
   name: lab-trust
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
 spec:
   sources:
     - useDefaultCAs: true
@@ -37,7 +42,11 @@ spec:
       matchLabels:
         trust.lab.internal/inject: "true"
 ---
-# lab-root: CHỈ root lab, cho Node (NODE_EXTRA_CA_CERTS=/etc/trust/lab-root-ca.pem). Biến này chỉ THÊM root vào bộ
+# lab-root: CHỈ root lab, cho Node và cho caCertificateRefs của BackendTLSPolicy (G0-10).
+# - Key là ca.crt: Gateway API coi ConfigMap không có key `ca.crt` là InvalidCACertificateRef (mô tả field trong CRD
+#   v1.6.1). Chỉ root lab là đủ và hẹp nhất cho việc kiểm chứng chỉ backend do lab-ca cấp. Chart app đổi tên khi mount
+#   (projected items: ca.crt → /etc/trust/lab-root-ca.pem).
+# - Node: NODE_EXTRA_CA_CERTS=/etc/trust/lab-root-ca.pem. Biến này chỉ THÊM root vào bộ
 # root có sẵn của Node, không bớt được; trỏ nó vào gói CA công khai của trust-manager sẽ làm Node tin lại root mà bản
 # Node đã gỡ (như hai root eMudhra trong gói mặc định của trust-manager v0.25.0). Một Bundle chỉ ghi được một key PEM
 # nên tách Bundle thứ hai; chart app gộp hai ConfigMap vào /etc/trust/ bằng projected volume.
@@ -45,6 +54,8 @@ apiVersion: trust.cert-manager.io/v1alpha1
 kind: Bundle
 metadata:
   name: lab-root
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
 spec:
   sources:
     - configMap:
@@ -52,7 +63,7 @@ spec:
         key: ca.crt
   target:
     configMap:
-      key: lab-root-ca.pem
+      key: ca.crt
     namespaceSelector:
       matchLabels:
         trust.lab.internal/inject: "true"

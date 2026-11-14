@@ -6,7 +6,9 @@
 #   riêng; ClusterIssuer cũng không tạo được cùng lần sync cài CRD của nó.
 # - Wave 5, cùng app edge: sau cert-manager (3, CRD và webhook), trust-manager (4, CRD Bundle) và Sealed Secrets (1).
 #   Gateway edge tham chiếu lab-ca bằng annotation; nếu issuer Ready sau Gateway vài giây thì cert-manager tự thử lại.
-# - Argo CD v3.6.1 có sẵn health check cho cert-manager.io ClusterIssuer và Certificate (đọc condition Ready).
+# - Argo CD v3.6.1 có sẵn health check cho cert-manager.io ClusterIssuer, Certificate (condition Ready) và
+#   trust.cert-manager.io Bundle (G0-07, `argocd admin settings resource-overrides health`: Synced=True → Healthy,
+#   Synced=False → Degraded kèm message lỗi).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

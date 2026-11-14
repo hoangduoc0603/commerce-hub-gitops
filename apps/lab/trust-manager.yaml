@@ -7,6 +7,9 @@
 # - Wave 4: sau cert-manager (3). Chart xin chứng chỉ webhook bằng Issuer selfSigned + Certificate của cert-manager
 #   (app.webhook.tls.helmCert.enabled=false là mặc định; docs khuyên không dùng chứng chỉ Helm sinh, hạn 10 năm), nên
 #   CRD và webhook của cert-manager phải có trước. Trước lab-ca (5), nơi tạo Bundle.
+# - Lệch chuẩn có chủ đích (ADR-0004): 1 replica, trong khi ValidatingWebhook của chart có failurePolicy Fail cho
+#   CREATE/UPDATE Bundle. trust-manager chết thì sync Bundle của app lab-ca lỗi tới khi pod lên lại (retry của lab-ca);
+#   ConfigMap đích đã có vẫn còn nên pod đang chạy không bị ảnh hưởng. Ghi ở cluster-entry.md mục lệch chuẩn.
 # - Không dùng v0.25.0: gói CA mặc định của bản đó còn hai root eMudhra bị lộ (release notes v0.26.0).
 # - Chart OCI trên quay.io như cert-manager (repoURL không tiền tố oci://).
 apiVersion: argoproj.io/v1alpha1
