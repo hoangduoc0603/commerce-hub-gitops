@@ -8,6 +8,16 @@
 # Lua lấy nguyên văn từ docs v3.6.1; mặc định Progressing để app con chưa có status vẫn bị chờ.
 # https://argo-cd.readthedocs.io/en/release-3.6/operator-manual/health/#argocd-app
 # Chuẩn: docs/standards/gitops-argocd.md, mục "Sync waves, hooks, health".
+#
+# Health check cho postgresql.cnpg.io/DatabaseRole (G0-08): Argo CD v3.6.1 có sẵn check cho Cluster và Database nhưng
+# không có cho DatabaseRole; thiếu check thì role lỗi vẫn hiện Healthy và wave Database không chờ role. Logic chép theo
+# check Database có sẵn (resource_customizations/postgresql.cnpg.io/Database/health.lua ở tag v3.6.1), vì DatabaseRole
+# ghi status cùng cách: SetAsReady đặt applied=true và observedGeneration; SetAsFailed đặt applied=false, không đổi
+# observedGeneration; SetAsUnknown đặt applied=nil (replica cluster). Nguồn: api/v1/databaserole_funcs.go tag v1.30.1.
+# - applied=false khi generation hiện tại chưa từng apply thành công là Progressing, không Degraded: lần đầu migrator có
+#   thể fail vì role trong inRoles chưa có, operator thử lại và tự khỏi; Degraded sẽ làm hỏng chính lần sync đó.
+#   Giá phải trả: role lỗi ngay từ đầu (ví dụ inRoles sai tên) kẹt ở Progressing kèm message lỗi, không chuyển đỏ.
+# Chuẩn: docs/standards/postgres-cnpg.md, mục "Argo CD".
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -25,5 +35,30 @@ data:
           hs.message = obj.status.health.message
         end
       end
+    end
+    return hs
+  resource.customizations.health.postgresql.cnpg.io_DatabaseRole: |
+    local hs = {
+      status = "Progressing",
+      message = "Waiting for CloudNativePG to reconcile DatabaseRole"
+    }
+    if obj.status == nil then
+      return hs
+    end
+    local generationObserved =
+      obj.metadata == nil or obj.metadata.generation == nil or
+      obj.status.observedGeneration == obj.metadata.generation
+    if obj.status.applied == true and generationObserved then
+      hs.status = "Healthy"
+      hs.message = obj.status.message or ""
+      return hs
+    end
+    if obj.status.applied == false and generationObserved then
+      hs.status = "Degraded"
+      hs.message = obj.status.message or "CloudNativePG failed to apply the DatabaseRole"
+      return hs
+    end
+    if obj.status.message ~= nil and obj.status.message ~= "" then
+      hs.message = obj.status.message
     end
     return hs
