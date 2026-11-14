@@ -1,4 +1,4 @@
-# Namespace chứa Gateway edge (và từ G0-06: Secret chứng chỉ wildcard, route chuyển HTTP sang HTTPS).
+# Namespace chứa Gateway edge, Secret chứng chỉ wildcard lab-wildcard-tls và route chuyển HTTP sang HTTPS.
 # Không có pod nào chạy ở đây: pod Envoy nằm ở envoy-gateway-system. Pod Security restricted cho đồng bộ.
 # Prune=false: commit lỡ không xóa namespace (xóa là mất Gateway, mọi hostname của lab).
 apiVersion: v1
@@ -19,21 +19,45 @@ kind: Gateway
 metadata:
   name: edge
   namespace: edge
+  annotations:
+    # gateway-shim của cert-manager (bật ở app cert-manager) tạo Certificate cho mỗi listener HTTPS có hostname,
+    # tls.mode Terminate và certificateRefs cùng namespace; thiếu một trong ba thì bị "skipped silently".
+    # Tên Secret trong certificateRefs trở thành secretName của Certificate. https://cert-manager.io/docs/usage/gateway/
+    cert-manager.io/cluster-issuer: lab-ca
+    # Mặc định cert-manager là RSA 2048. ECDSA P-256: handshake nhẹ hơn, cùng loại khóa với intermediate.
+    cert-manager.io/private-key-algorithm: ECDSA
+    cert-manager.io/private-key-size: "256"
 spec:
   gatewayClassName: envoy
   listeners:
-    # G0-05 chỉ có HTTP. G0-06 đổi listener này thành `from: Same` (chỉ nhận route chuyển sang HTTPS trong namespace
-    # edge) và thêm listener https (443, TLS Terminate, chứng chỉ wildcard) mang selector bên dưới.
+    # Wildcard chỉ phủ đúng một nhãn bên trái: a.lab.internal khớp, a.b.lab.internal không.
     - name: http
       protocol: HTTP
       port: 80
-      # Wildcard chỉ phủ đúng một nhãn bên trái: a.lab.internal khớp, a.b.lab.internal không.
       hostname: "*.lab.internal"
+      # Chỉ route trong namespace edge (route chuyển sang HTTPS, http-redirect.yaml) gắn được vào cổng 80: không app nào
+      # phục vụ nội dung qua HTTP thường. `Same` cũng là mặc định, ghi rõ để không ai đổi nhầm.
       allowedRoutes:
         kinds:
           - kind: HTTPRoute
-        # Mặc định của `from` là Same. Selector: chỉ namespace mang nhãn này (do platform gắn khi tạo namespace) gắn
-        # được route; namespace khác bị từ chối với reason NotAllowedByListeners. Không bao giờ dùng `from: All`.
+        namespaces:
+          from: Same
+    - name: https
+      protocol: HTTPS
+      port: 443
+      hostname: "*.lab.internal"
+      tls:
+        # Envoy giải mã TLS ở biên. Secret sinh bởi cert-manager (chứng chỉ wildcard *.lab.internal từ lab-ca), cùng
+        # namespace với Gateway nên không cần ReferenceGrant.
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: lab-wildcard-tls
+      allowedRoutes:
+        kinds:
+          - kind: HTTPRoute
+        # Selector: chỉ namespace mang nhãn này (do platform gắn khi tạo namespace) gắn được route; namespace khác bị
+        # từ chối với reason NotAllowedByListeners. Không bao giờ dùng `from: All`.
         namespaces:
           from: Selector
           selector:
