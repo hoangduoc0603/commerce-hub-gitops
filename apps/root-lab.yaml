@@ -1,0 +1,32 @@
+# Root app (app-of-apps) của môi trường lab: quản lý mọi Application và AppProject trong apps/lab/.
+# Tạo một lần bằng lệnh bootstrap 2:
+#   kubectl apply -f apps/lab/projects.yaml -f apps/root-lab.yaml
+# Cố ý KHÔNG tự quản lý (file nằm ngoài apps/lab/): commit sai `path` sẽ làm root tự prune mọi app con.
+# Sửa file này thì admin chạy lại lệnh bootstrap 2.
+# Cố ý KHÔNG có finalizer resources-finalizer.argocd.argoproj.io: xóa nhầm root chỉ làm app con mồ côi,
+# không cascade xóa hạ tầng.
+# Docs: https://argo-cd.readthedocs.io/en/stable/operator-manual/cluster-bootstrapping/
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root-lab
+  namespace: argocd
+spec:
+  project: platform
+  source:
+    repoURL: https://github.com/hoangduoc0603/commerce-hub-gitops.git
+    targetRevision: main
+    path: apps/lab
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

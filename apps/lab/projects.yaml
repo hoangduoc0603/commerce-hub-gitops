@@ -5,6 +5,7 @@
 # Chuẩn: docs/standards/gitops-argocd.md, mục "AppProject: giới hạn nguồn và đích".
 # Docs: https://argo-cd.readthedocs.io/en/stable/user-guide/projects/
 #       https://argo-cd.readthedocs.io/en/stable/operator-manual/declarative-setup/#projects
+# Sync wave -1: root áp project trước các Application dùng nó (app argocd wave 0, hạ tầng từ wave 1).
 
 # default: khóa hoàn toàn. App quên khai `spec.project` rơi vào đây và bị từ chối,
 # thay vì nhận quyền mặc định (mọi repo, mọi cụm, mọi Kind). Manifest theo docs "The Default Project".
@@ -13,6 +14,8 @@ kind: AppProject
 metadata:
   name: default
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
 spec:
   description: Khóa. Mọi Application phải khai project platform hoặc commerce.
   sourceRepos: []
@@ -31,6 +34,8 @@ kind: AppProject
 metadata:
   name: platform
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
   # Chặn xóa project khi còn Application tham chiếu tới nó.
   finalizers:
     - resources-finalizer.argocd.argoproj.io
@@ -52,6 +57,8 @@ kind: AppProject
 metadata:
   name: commerce
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:

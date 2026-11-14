@@ -1,0 +1,35 @@
+# Argo CD tự quản lý: cùng thư mục bootstrap/argocd mà lệnh bootstrap 1 đã áp.
+# Từ đây nâng Argo CD hoặc sửa argocd-cm chỉ là một commit.
+# ServerSideApply=true là bắt buộc khi Argo CD quản lý chính nó (CRD ApplicationSet vượt giới hạn
+# annotation 262144 byte); từ 3.6 tùy chọn này cũng bật Server-Side Diff.
+# Cố ý KHÔNG có finalizer resources-finalizer.argocd.argoproj.io: xóa app này không được kéo theo Argo CD.
+# Lối thoát khi một commit làm hỏng Argo CD: chạy lại lệnh bootstrap 1 từ bản Git tốt (--force-conflicts).
+# Docs: https://argo-cd.readthedocs.io/en/stable/operator-manual/declarative-setup/#manage-argo-cd-using-argo-cd
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: platform
+  source:
+    repoURL: https://github.com/hoangduoc0603/commerce-hub-gitops.git
+    targetRevision: main
+    path: bootstrap/argocd
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+    syncOptions:
+      - ServerSideApply=true
