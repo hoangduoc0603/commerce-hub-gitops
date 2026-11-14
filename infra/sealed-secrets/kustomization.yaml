@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  # Bản sao nguyên văn CRD SealedSecret của Sealed Secrets v0.41.2
+  # (helm/sealed-secrets/crds/bitnami.com_sealedsecrets.yaml ở tag v0.41.2, trùng byte với crds/ của chart 2.22.0;
+  # sha256 6ccc74ae…f283fab). Tách khỏi chart (app dùng helm.skipCrds) vì thư mục crds/ của Helm không render
+  # template, nên không gắn được annotation bảo vệ bên dưới. Nâng chart: vendor lại file này từ tag mới, xem diff.
+  - upstream/sealedsecrets-crd.yaml
+patches:
+  # CRD này giữ dữ liệu: xóa CRD là Kubernetes xóa mọi SealedSecret, rồi GC xóa luôn mọi Secret sinh ra từ chúng
+  # (Secret có ownerReference tới SealedSecret). Tức là mọi mật khẩu DB, khóa CA trong cụm biến mất một lượt.
+  # - Prune=false: commit lỡ làm CRD biến khỏi manifest (vd. bật nhầm skipCrds ở chỗ khác) không xóa CRD.
+  # - Delete=false: xóa app sealed-secrets (có finalizer) không cascade xóa CRD.
+  # Gỡ thật thì admin `kubectl delete crd` có chủ ý.
+  # https://argo-cd.readthedocs.io/en/release-3.6/user-guide/sync-options/#no-prune-resources
+  # https://argo-cd.readthedocs.io/en/release-3.6/user-guide/sync-options/#no-resource-deletion
+  - target:
+      group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+      name: sealedsecrets.bitnami.com
+    patch: |-
+      apiVersion: apiextensions.k8s.io/v1
+      kind: CustomResourceDefinition
+      metadata:
+        name: sealedsecrets.bitnami.com
+        annotations:
+          argocd.argoproj.io/sync-options: Prune=false,Delete=false

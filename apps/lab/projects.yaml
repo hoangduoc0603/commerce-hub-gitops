@@ -45,8 +45,11 @@ metadata:
     - resources-finalizer.argocd.argoproj.io
 spec:
   description: Hạ tầng của lab (Argo CD, Sealed Secrets, cửa vào cụm, PostgreSQL, Kafka, LGTM, Keycloak). Chỉ admin.
+  # Mỗi Helm repo của bên thứ ba được liệt kê đích danh (không wildcard), thêm cùng commit với app dùng nó.
   sourceRepos:
     - https://github.com/hoangduoc0603/commerce-hub-gitops.git
+    # Sealed Secrets (G0-04)
+    - https://bitnami.github.io/sealed-secrets
   destinations:
     - server: https://kubernetes.default.svc
       namespace: '*'
