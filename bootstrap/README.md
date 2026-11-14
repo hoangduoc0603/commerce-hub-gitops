@@ -24,6 +24,11 @@ kubectl wait --for=condition=Established --timeout=120s \
 kubectl -n argocd wait --for=condition=Available --timeout=300s deployment --all
 kubectl -n argocd rollout status statefulset/argocd-application-controller --timeout=300s
 
+# Chỉ khi DỰNG LẠI cụm đã có SealedSecret trong Git: nạp bản sao lưu khóa sealing trước lệnh 2, để controller
+# (app sealed-secrets, wave 1) nhận khóa cũ thay vì sinh khóa mới. Cụm mới hoàn toàn thì bỏ qua.
+# Runbook: docs/runbooks/sealing-key.md (repo docs), mục "Khôi phục" A.
+#   kubectl apply -f ~/.commerce-hub/sealing-keys/sealing-key-backup-<context>-<stamp>.yaml
+
 # Lệnh 2: tạo AppProject và root app. Từ đây Argo CD tự kéo phần còn lại từ Git.
 kubectl apply -f apps/lab/projects.yaml -f apps/root-lab.yaml
 ```
