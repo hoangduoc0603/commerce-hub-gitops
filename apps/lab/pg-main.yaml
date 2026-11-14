@@ -1,0 +1,38 @@
+# pg-main: cluster PostgreSQL 18 dùng chung cho mọi service có DB, Keycloak và marketplace-sim (ADR-0003), 1 instance ở lab
+# (ADR-0004). Mã nguồn ở infra/pg-main/: namespace postgres, Cluster; Database, DatabaseRole, Secret mật khẩu và Pooler
+# thêm ở các bước sau của G0-08.
+# Ticket G0-08. Chuẩn: docs/standards/postgres-cnpg.md.
+#
+# - Wave 7: sau operator CloudNativePG (6, CRD và webhook phải có trước khi apply Cluster).
+# - Project platform: quyền ghi DatabaseRole và Pooler tương đương superuser của cluster (docs CNPG Security), nên chỉ app
+#   hạ tầng được tạo; project commerce chặn cả group postgresql.cnpg.io.
+# - App có finalizer cascade như mọi child app, nhưng Cluster và namespace mang Prune=false/Delete=false (xem
+#   infra/pg-main/), nên xóa app hay lỡ xóa file không kéo theo dữ liệu.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: pg-main
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  source:
+    repoURL: https://github.com/hoangduoc0603/commerce-hub-gitops.git
+    targetRevision: main
+    path: infra/pg-main
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: postgres
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

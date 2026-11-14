@@ -1,0 +1,15 @@
+# Namespace của pg-main. Cluster, Database, DatabaseRole, Pooler và Secret mật khẩu role bắt buộc cùng namespace (docs CNPG
+# Declarative role management, Connection pooling). Do platform tạo, app không dùng CreateNamespace.
+# - Pod Security restricted: pod do operator tạo cũng qua admission (docs CNPG Security – Kubernetes Admission Control);
+#   securityContext mặc định của pod PostgreSQL (non-root, seccomp RuntimeDefault, drop ALL) phải đạt mức này. Đã kiểm khi
+#   dựng (G0-08 bước 3).
+# - Prune=false: commit lỡ làm file này biến mất không xóa namespace (xóa namespace là xóa Cluster và PVC bên trong).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: postgres
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.37
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false

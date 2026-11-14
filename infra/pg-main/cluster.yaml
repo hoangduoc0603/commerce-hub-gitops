@@ -1,0 +1,53 @@
+# Cluster pg-main. Chuẩn: docs/standards/postgres-cnpg.md mục "Cluster pg-main". ADR-0003, ADR-0004.
+# API: https://cloudnative-pg.io/docs/1.30/cloudnative-pg.v1/#clusterspec
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: pg-main
+  annotations:
+    # Delete=false: xóa app pg-main không xóa Cluster (xóa Cluster là GC xóa pod và object con). Prune=false: commit lỡ
+    # làm file này biến mất cũng không xóa. Muốn bỏ cluster thật thì xóa tay sau khi có backup (G0-09).
+    # https://argo-cd.readthedocs.io/en/release-3.6/user-guide/sync-options/
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  # 1 instance (ADR-0004). Tăng lên 2 bằng commit khi thí nghiệm failover hoặc khi bảo trì node (postgres-cnpg.md mục
+  # Drain), xong thì revert.
+  instances: 1
+
+  # PostgreSQL 18.7, image standard (dùng được với plugin Barman Cloud ở G0-09; system deprecated) trên Debian trixie.
+  # Tag có timestamp là tag bất biến của lần build; digest là image index đa kiến trúc, đè tag.
+  # NÂNG CẤP minor: đổi tag và digest cùng commit (docs: operator restart pod để áp image mới; 1 instance nên gián đoạn).
+  # Tra tag bằng ghcr.io/v2/cloudnative-pg/postgresql/tags/list, digest bằng `docker buildx imagetools inspect`.
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.7-202611122305-standard-trixie@sha256:23719505c7cc417b043ffd9998b44ab8d57fec1d92f0bf11b231a1754a5962f2
+
+  # Ghi tường minh dù là mặc định, để đọc file là thấy chính sách:
+  # - Superuser tắt: operator xóa Secret superuser và đặt mật khẩu postgres thành NULL; postgres chỉ vào được bằng
+  #   `local all all peer` trong pod (kubectl cnpg psql).
+  # - PDB bật: với 1 instance, operator chặn drain node chứa pod (docs Kubernetes upgrade and maintenance). Cách bảo trì
+  #   node chọn ở G0-08 bước 8.
+  enableSuperuserAccess: false
+  enablePDB: true
+
+  # Bootstrap mặc định (initdb tạo database app, owner app, Secret pg-main-app). Không đưa Secret đó cho service nào; mọi
+  # database dùng thật tạo bằng CR Database (G0-08, quyết định B).
+
+  postgresql:
+    parameters:
+      # Khoảng 25% memory của pod (docs Resource management). Các tham số khác giữ mặc định cho tới khi có số đo.
+      shared_buffers: 256MB
+
+  # requests = limits cho cả CPU và memory: QoS Guaranteed (docs Resource management). Memory theo ngân sách 1 024 Mi
+  # (ticket 04 của map); CPU không phải ràng buộc của lab (node 4–6 vCPU, request hiện dưới 1 core mỗi node).
+  resources:
+    requests:
+      cpu: "1"
+      memory: 1024Mi
+    limits:
+      cpu: "1"
+      memory: 1024Mi
+
+  # local-path: volume gắn node (shared-nothing như docs khuyên). Provisioner không thực thi size; số này là ước lượng
+  # cho G0–G1. Một volume, không tách WAL (cùng một đĩa ảo).
+  storage:
+    storageClass: local-path
+    size: 10Gi
