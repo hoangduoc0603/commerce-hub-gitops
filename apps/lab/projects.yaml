@@ -21,7 +21,11 @@ spec:
   sourceRepos: []
   sourceNamespaces: []
   destinations: []
-  # Không khai clusterResourceWhitelist: allow-list rỗng là cấm mọi Kind cluster-scoped.
+  # Phải ghi tường minh `[]`: project default do Argo CD tự tạo với clusterResourceWhitelist */*,
+  # và apply (client-side) giữ nguyên field nào manifest không nhắc tới. Bỏ trống ở đây thì trên cụm
+  # vẫn còn */* (thấy ở G0-03 bước 6 qua `argocd proj get default`). Allow-list rỗng là cấm mọi Kind
+  # cluster-scoped.
+  clusterResourceWhitelist: []
   namespaceResourceBlacklist:
     - group: '*'
       kind: '*'
