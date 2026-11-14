@@ -1,0 +1,45 @@
+# Phép thử G0-05 bước 6: namespace KHÔNG mang nhãn edge.lab.internal/routes khai cùng hostname whoami.lab.internal.
+# Kỳ vọng: listener của edge từ chối (Accepted=False, NotAllowedByListeners), traffic vẫn tới whoami thật.
+# Gỡ khi kết ticket.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: stray
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.37
+---
+# Service không có pod: đủ để route có backend hợp lệ, lỗi chỉ còn do allowedRoutes.
+apiVersion: v1
+kind: Service
+metadata:
+  name: impostor
+  namespace: stray
+spec:
+  selector:
+    app.kubernetes.io/name: impostor
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: hijack
+  namespace: stray
+spec:
+  parentRefs:
+    - name: edge
+      namespace: edge
+      sectionName: http
+  hostnames:
+    - whoami.lab.internal
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: impostor
+          port: 80

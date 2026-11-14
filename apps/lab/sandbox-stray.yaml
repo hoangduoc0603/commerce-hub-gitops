@@ -1,0 +1,24 @@
+# Phép thử G0-05 bước 6 (gỡ khi kết ticket): route ở namespace không có nhãn cho phép. App này dự kiến Degraded
+# (health có sẵn của Argo CD cho HTTPRoute đọc status.parents[].conditions). Wave 6 như sandbox-whoami.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: sandbox-stray
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  source:
+    repoURL: https://github.com/hoangduoc0603/commerce-hub-gitops.git
+    targetRevision: main
+    path: sandbox/stray
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: stray
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
