@@ -43,6 +43,12 @@ spec:
       targetRevision: v1.10.0
       helm:
         releaseName: eg
+        # Chart đặt certgen.job.ttlSecondsAfterFinished 30; bỏ đi theo gitops-argocd.md (Kubernetes có thể xóa Job hook
+        # trước khi Argo CD đọc kết quả). Phải dùng --set …=null: giá trị null trong valuesObject bị mất khi lưu
+        # Application (G0-05 bước 3: Job vẫn bị xóa sau 30 s), còn Helm hiểu --set key=null là xóa key mặc định.
+        parameters:
+          - name: certgen.job.ttlSecondsAfterFinished
+            value: "null"
         valuesObject:
           crds:
             enabled: false
@@ -73,9 +79,7 @@ spec:
           certgen:
             job:
               # Job certgen là Helm hook pre-install/pre-upgrade, Argo CD chạy nó như PreSync ở MỌI lần sync (idempotent:
-              # không ghi đè chứng chỉ đã có). Chart đặt ttlSecondsAfterFinished 30; bỏ đi theo gitops-argocd.md
-              # (Kubernetes có thể xóa Job trước khi Argo CD đọc kết quả), giữ Job gần nhất để đọc log.
-              ttlSecondsAfterFinished: null
+              # không ghi đè chứng chỉ đã có). Giữ Job gần nhất để đọc log; ttlSecondsAfterFinished bỏ ở `parameters`.
               annotations:
                 argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
     - repoURL: https://github.com/hoangduoc0603/commerce-hub-gitops.git
