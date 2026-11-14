@@ -6,8 +6,9 @@
 # Chuyển nó vào password manager rồi xóa bản trên đĩa. Script không chứa khóa nên nằm được trong repo public.
 #
 # Khác lệnh trong README upstream (`kubectl get secret … -o yaml > main.key`): bỏ các field do API server
-# sinh (resourceVersion, uid, creationTimestamp, managedFields). Giữ chúng thì `kubectl apply` lên cụm mới
-# hoặc sau khi Secret bị xóa bị từ chối, vì không được đặt resourceVersion khi tạo object mới.
+# sinh (resourceVersion, uid, creationTimestamp, managedFields) cho file gọn và không mang metadata của cụm cũ.
+# Không bắt buộc: G0-04 bước 8 thử `kubectl apply --dry-run=server` với Secret còn resourceVersion, uid
+# vẫn tạo được. Giữ nhãn sealedsecrets.bitnami.com/sealed-secrets-key: controller tìm khóa theo nhãn này.
 # Không lấy Secret `sealed-secrets-key` kiểu cũ: chỉ có nếu từng cài bản < 0.9 (cụm này cài 0.41.2).
 #
 # Dùng: scripts/backup-sealing-key.sh [thư-mục-đích]   (mặc định ~/.commerce-hub/sealing-keys)
