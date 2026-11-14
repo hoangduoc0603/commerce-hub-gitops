@@ -1,0 +1,62 @@
+# Vai trò "infra provider" của Gateway API: chọn implementation (controllerName) và tham số hạ tầng (EnvoyProxy).
+# https://gateway-api.sigs.k8s.io/concepts/roles-and-personas/
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: envoy
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+  # Mọi Gateway của class này dùng chung cấu hình pod Envoy bên dưới.
+  parametersRef:
+    group: gateway.envoyproxy.io
+    kind: EnvoyProxy
+    name: envoy
+    namespace: envoy-gateway-system
+---
+# Cấu hình data plane: Deployment và Service mà controller tạo cho mỗi Gateway của class envoy.
+# Tên field đối chiếu CRD gateway.envoyproxy.io_envoyproxies của v1.10.0 (spec.provider.kubernetes:
+# envoyDeployment{replicas, container, pod, patch, strategy}, envoyService{annotations, externalTrafficPolicy, …}).
+# https://gateway.envoyproxy.io/docs/api/extension_types/#envoyproxy
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: envoy
+  namespace: envoy-gateway-system
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyDeployment:
+        # ADR-0004: 1 replica ở lab (lệch có chủ đích, cluster-entry.md: production cần ≥ 2 cộng PDB). Mỗi lần nâng
+        # Envoy Gateway hoặc đổi EnvoyProxy có thể làm rơi kết nối.
+        replicas: 1
+        container:
+          # ADR-0004: Envoy 128 Mi, request = limit (mặc định CRD: request 512Mi). Không CPU limit.
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 128Mi
+        # EnvoyProxy không có field resources cho container shutdown-manager (sidecar giữ pod sống để Envoy drain kết
+        # nối khi tắt), nên đặt qua patch. Strategic merge trộn containers theo name, giữ nguyên image và lệnh.
+        patch:
+          type: StrategicMerge
+          value:
+            spec:
+              template:
+                spec:
+                  containers:
+                    - name: shutdown-manager
+                      resources:
+                        requests:
+                          cpu: 10m
+                          memory: 32Mi
+                        limits:
+                          memory: 32Mi
+      envoyService:
+        # IP cố định của edge: dnsmasq trên gw trỏ *.lab.internal về đây (ADR-0014). Pool MetalLB lab-pool có sẵn IP này.
+        # https://metallb.io/usage/
+        # Giữ externalTrafficPolicy mặc định Local (không SNAT thêm một lần trong cụm; IP nguồn vẫn mất ở gw).
+        annotations:
+          metallb.io/loadBalancerIPs: 10.20.0.200

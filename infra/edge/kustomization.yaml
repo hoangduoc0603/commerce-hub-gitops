@@ -1,0 +1,7 @@
+# Cửa vào cụm (ADR-0013): GatewayClass, EnvoyProxy, namespace edge và Gateway edge. Chỉ project platform tạo các Kind
+# này; service chỉ viết HTTPRoute gắn vào edge (mô hình vai trò của Gateway API).
+# Chuẩn: docs/standards/cluster-entry.md mục "Gateway API CRD và Envoy Gateway", "Gateway edge và sở hữu".
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - gatewayclass.yaml

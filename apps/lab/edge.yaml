@@ -1,0 +1,35 @@
+# Cửa vào cụm: GatewayClass envoy, EnvoyProxy, namespace edge và Gateway edge (infra/edge/). Ticket G0-05.
+# Chuẩn: docs/standards/cluster-entry.md, ADR-0013.
+#
+# - Wave 5: sau Envoy Gateway (4), vì EnvoyProxy là CRD của Envoy Gateway và GatewayClass chỉ Accepted khi controller
+#   chạy. G0-06 thêm ClusterIssuer lab-ca cùng wave.
+# - Health: Argo CD v3.6.1 có sẵn health check cho Gateway và HTTPRoute (đọc status.conditions), nên wave sau chỉ
+#   chạy khi Gateway edge Programmed.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: edge
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  source:
+    repoURL: https://github.com/hoangduoc0603/commerce-hub-gitops.git
+    targetRevision: main
+    path: infra/edge
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: edge
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
