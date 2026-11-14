@@ -1,0 +1,101 @@
+# Resource của Argo CD trên home lab.
+# Memory theo bảng ngân sách G0–G1 (ADR-0004, docs/.scratch/architecture-g0-g1/issues/04-resource-budget.md#answer):
+# memory request = limit (docs/standards/helm-chart.md); không đặt CPU limit để tránh throttling.
+# CPU request là ước lượng ban đầu, chỉnh theo số đo `kubectl top` ở ticket G0-03 bước 5.
+# Init container đặt bằng container chính cùng pod: request hiệu lực của pod là
+# max(init lớn nhất, tổng container chính), nên không tốn thêm ngân sách.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: argocd-application-controller
+spec:
+  template:
+    spec:
+      containers:
+        - name: argocd-application-controller
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              memory: 512Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argocd-repo-server
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: copyutil
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 256Mi
+      containers:
+        - name: argocd-repo-server
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argocd-server
+spec:
+  template:
+    spec:
+      containers:
+        - name: argocd-server
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 128Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argocd-redis
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: secret-init
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 64Mi
+      containers:
+        - name: redis
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 64Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argocd-applicationset-controller
+spec:
+  template:
+    spec:
+      containers:
+        - name: argocd-applicationset-controller
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 64Mi

@@ -5,3 +5,16 @@ resources:
   - namespace.yaml
   # nâng Argo CD thì sửa tag ở đây, và đọc trang upgrade của từng minor trước khi sửa
   - https://raw.githubusercontent.com/argoproj/argo-cd/v3.6.1/manifests/install.yaml
+patches:
+  # Gỡ Dex và notifications-controller theo ADR-0004: SSO nối thẳng OIDC Keycloak (ticket G0-12),
+  # chưa dùng notifications. Chọn theo nhãn để bản nâng cấp thêm resource mới cũng bị gỡ theo.
+  # kind/name bên dưới chỉ là placeholder; target quyết định resource bị xóa.
+  - target:
+      labelSelector: app.kubernetes.io/component in (dex-server,notifications-controller)
+    patch: |-
+      $patch: delete
+      kind: Any
+      metadata:
+        name: any
+  # Resource theo ngân sách ADR-0004
+  - path: resources-patch.yaml
