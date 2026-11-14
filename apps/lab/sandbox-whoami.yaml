@@ -1,0 +1,25 @@
+# App thử của G0-05 (gỡ khi kết ticket). Project platform vì app tự tạo namespace và gắn nhãn cho phép gắn route;
+# service thật đi qua ApplicationSet của project commerce, namespace do platform tạo sẵn.
+# Wave 6: sau app edge (5), vì route cần Gateway edge.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: sandbox-whoami
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  source:
+    repoURL: https://github.com/hoangduoc0603/commerce-hub-gitops.git
+    targetRevision: main
+    path: sandbox/whoami
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: whoami
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
