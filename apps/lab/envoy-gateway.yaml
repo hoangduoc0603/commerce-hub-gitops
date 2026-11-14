@@ -5,7 +5,7 @@
 #
 # - Wave 4: sau CRD Gateway API (2) và cert-manager (3, G0-06); Envoy Gateway v1.10 cần CRD v1.6 có trước.
 # - ServerSideApply=true theo docs cài bằng Argo CD (CRD lớn vượt giới hạn annotation của client-side apply).
-# - Không CreateNamespace: namespace là source thứ ba, do platform tạo (infra/envoy-gateway/).
+# - Không CreateNamespace: namespace nằm ở source thứ hai, do platform tạo (infra/envoy-gateway/).
 # - Chart OCI trên Docker Hub, repoURL không có tiền tố oci:// (Argo CD coi repoURL không có scheme là Helm OCI).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -19,24 +19,9 @@ metadata:
 spec:
   project: platform
   sources:
-    # CRD riêng của Envoy Gateway (EnvoyProxy, ClientTrafficPolicy, BackendTrafficPolicy…). BẪY: gateway-helm với
-    # crds.enabled=false tắt cả nhóm CRD này chứ không chỉ CRD Gateway API (subchart `crds` gộp cả hai), nên phải
-    # cài từ chart gateway-crds-helm, chỉ bật phần envoyGateway. CRD Gateway API đã có ở app gateway-api-crds.
-    # Chart này để CRD trong templates/ nên skipCrds không liên quan.
-    # Digest gói chart: sha256 475c39aad3a05e3974a29fb80cfefe882b743e45e2ec0f751790ff0cb83bfa5d
-    - repoURL: docker.io/envoyproxy
-      chart: gateway-crds-helm
-      targetRevision: v1.10.0
-      helm:
-        releaseName: eg-crds
-        valuesObject:
-          crds:
-            gatewayAPI:
-              enabled: false
-            envoyGateway:
-              enabled: true
-    # Controller. NÂNG CẤP: đổi cùng commit targetRevision của HAI chart trên, digest image controller bên dưới; đọc
-    # bảng matrix (bản CRD Gateway API, dải Kubernetes) và nâng app gateway-api-crds trước nếu matrix đòi.
+    # Controller. NÂNG CẤP: đổi cùng commit targetRevision dưới đây, digest image controller, CRD vendor trong
+    # infra/envoy-gateway/upstream/ (render lại từ gateway-crds-helm cùng version); đọc bảng matrix (bản CRD Gateway API,
+    # dải Kubernetes) và nâng app gateway-api-crds trước nếu matrix đòi.
     # Digest gói chart: sha256 dcb82a14c04b426615a71d97222c7edf9f5ff58b800d241e71ac5784ae6dc7b7
     - repoURL: docker.io/envoyproxy
       chart: gateway-helm
@@ -82,6 +67,14 @@ spec:
               # không ghi đè chứng chỉ đã có). Giữ Job gần nhất để đọc log; ttlSecondsAfterFinished bỏ ở `parameters`.
               annotations:
                 argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+              # Chart để trống (pod BestEffort). ADR-0004: request = limit; Job chỉ sinh vài chứng chỉ.
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 64Mi
+                limits:
+                  memory: 64Mi
+    # Namespace envoy-gateway-system và CRD riêng của Envoy Gateway (vendor, có Prune=false,Delete=false).
     - repoURL: https://github.com/hoangduoc0603/commerce-hub-gitops.git
       targetRevision: main
       path: infra/envoy-gateway

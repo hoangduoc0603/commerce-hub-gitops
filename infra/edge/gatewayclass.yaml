@@ -48,6 +48,11 @@ spec:
                 spec:
                   containers:
                     - name: shutdown-manager
+                      # shutdown-manager là binary Go của Envoy Gateway (đo lúc rảnh 23Mi/32Mi): đặt GOMEMLIMIT ~90%
+                      # limit để GC biết trần, như controller và Argo CD.
+                      env:
+                        - name: GOMEMLIMIT
+                          value: 28MiB
                       resources:
                         requests:
                           cpu: 10m

@@ -91,6 +91,15 @@ spec:
       kind: Gateway
     - group: gateway.networking.k8s.io
       kind: BackendTLSPolicy
+    # CRD của Envoy Gateway chạy code hoặc mở đích tùy ý trong Envoy dùng chung của edge (G0-05 review): Wasm/ext_proc,
+    # patch xDS thô, Backend trỏ IP/FQDN bất kỳ. Service chỉ cần HTTPRoute (timeout trong route); policy khác mở khi có
+    # nhu cầu thật.
+    - group: gateway.envoyproxy.io
+      kind: EnvoyExtensionPolicy
+    - group: gateway.envoyproxy.io
+      kind: EnvoyPatchPolicy
+    - group: gateway.envoyproxy.io
+      kind: Backend
     # RBAC trong namespace: không cấm thì service tạo RoleBinding trỏ ClusterRole cluster-admin cho
     # ServiceAccount của mình, rồi từ trong pod sửa chính các Kind ở trên (blacklist chỉ chặn đường qua
     # Argo CD). Chart app chỉ tạo ServiceAccount, không tạo Role (docs/standards/helm-chart.md).
