@@ -1,0 +1,22 @@
+# TẠM (ticket G0-03 bước 10, gỡ ở bước 11). Manifest mà project commerce PHẢI từ chối:
+# - ClusterRole: cluster-scoped, commerce có clusterResourceWhitelist: [] (cấm hết). Quyền đọc mọi Secret
+#   là ví dụ leo thang quyền nếu một service tạo được nó.
+# - ResourceQuota: namespaced nhưng nằm trong namespaceResourceBlacklist của commerce (hàng rào do platform đặt).
+# Không app nào trong root trỏ vào thư mục này; app thử tạo tay bằng kubectl rồi xóa.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: probe-commerce-forbidden
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list"]
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: probe-commerce-forbidden
+  namespace: hello
+spec:
+  hard:
+    pods: "100"
