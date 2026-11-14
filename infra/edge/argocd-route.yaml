@@ -20,3 +20,19 @@ spec:
     - backendRefs:
         - name: argocd-server
           port: 80
+      # Tắt timeout request (mặc định Envoy 15 s) cho cả route: UI giữ stream dài (/api/v1/stream/…, log, terminal) và
+      # CLI --grpc-web cũng stream (app wait, logs -f) qua nhiều đường dẫn REST lẫn gRPC; liệt kê từng path thì dễ sót.
+      # Kết nối treo vẫn bị cắt bởi idle timeout của Envoy. Gateway API: giá trị 0 "SHOULD disable the timeout
+      # completely". https://gateway.envoyproxy.io/docs/tasks/traffic/http-timeouts/ (review G0-06)
+      timeouts:
+        request: "0s"
+      filters:
+        # HSTS: argocd-server chạy server.insecure nên cookie argocd.token của đăng nhập local KHÔNG có cờ Secure
+        # (server/server.go@v3.6.1 gọi SetTokenCookie(..., !server.Insecure)). Không có HSTS, trình duyệt gửi cookie đó
+        # qua http:// trước khi nhận 301. HSTS buộc trình duyệt tự đổi sang https từ lần thứ hai (review G0-06).
+        # 1 năm, không includeSubDomains/preload: tên nội bộ, chỉ áp cho đúng host này.
+        - type: ResponseHeaderModifier
+          responseHeaderModifier:
+            set:
+              - name: Strict-Transport-Security
+                value: max-age=31536000
