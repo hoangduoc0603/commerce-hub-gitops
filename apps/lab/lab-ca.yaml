@@ -1,9 +1,10 @@
-# PKI của lab trong cụm: SealedSecret lab-intermediate-ca và ClusterIssuer lab-ca (infra/lab-ca/). Ticket G0-06.
+# PKI của lab trong cụm: SealedSecret lab-intermediate-ca và ClusterIssuer lab-ca (G0-06); ConfigMap root lab và Bundle
+# lab-trust, lab-root của trust-manager (G0-07). Mã nguồn ở infra/lab-ca/.
 # Chuẩn: docs/standards/cluster-entry.md mục "PKI và cert-manager", ADR-0014.
 #
 # - App riêng thay vì gộp vào cert-manager hay edge: PKI có vòng đời riêng (xoay intermediate 2 năm một lần) và health
 #   riêng; ClusterIssuer cũng không tạo được cùng lần sync cài CRD của nó.
-# - Wave 5, cùng app edge: sau cert-manager (3, CRD và webhook) và Sealed Secrets (1). Gateway edge tham chiếu
+# - Wave 5, cùng app edge: sau cert-manager (3, CRD và webhook), trust-manager (4, CRD Bundle) và Sealed Secrets (1). Gateway edge tham chiếu
 #   lab-ca bằng annotation; nếu issuer Ready sau Gateway vài giây thì cert-manager tự thử lại.
 # - Argo CD v3.6.1 có sẵn health check cho cert-manager.io ClusterIssuer và Certificate (đọc condition Ready).
 apiVersion: argoproj.io/v1alpha1

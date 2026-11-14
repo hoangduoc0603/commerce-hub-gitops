@@ -1,5 +1,6 @@
-# PKI trong cụm (ADR-0014): intermediate CA dạng SealedSecret và ClusterIssuer lab-ca dùng nó.
-# Chuẩn: docs/standards/cluster-entry.md mục "PKI và cert-manager".
+# PKI trong cụm (ADR-0014): intermediate CA dạng SealedSecret và ClusterIssuer lab-ca dùng nó (G0-06); phân phối root
+# lab cho pod bằng Bundle của trust-manager (G0-07).
+# Chuẩn: docs/standards/cluster-entry.md mục "PKI và cert-manager", "Phân phối trust".
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
@@ -7,13 +8,35 @@ resources:
   # Xoay: chạy lại với --replace, commit, rồi `cmctl renew` mọi Certificate của lab-ca.
   - lab-intermediate-ca.sealedsecret.yaml
   - clusterissuer.yaml
+  - bundles.yaml
+configMapGenerator:
+  # Nguồn của hai Bundle, nằm ở trust namespace (cert-manager). lab-root-ca.crt là bản sao phần CÔNG KHAI của
+  # platform/pki/lab-root-ca.crt (SHA-256 A5:92:C1:6B…8F:CD, hết hạn 2036-11-11). Xoay root: chép lại từ platform cùng
+  # commit; trust-manager cập nhật ConfigMap đích, nhưng JVM và Node chỉ đọc truststore lúc khởi động nên phải restart pod.
+  - name: lab-root-ca
+    files:
+      - ca.crt=lab-root-ca.crt
+    options:
+      # Bundle tham chiếu theo tên cố định.
+      disableNameSuffixHash: true
 patches:
-  # Wave -1 trong app (gitops-argocd.md): Secret có trước ClusterIssuer, issuer khỏi báo lỗi "secret not found" lúc đầu.
+  # Wave -1 trong app (gitops-argocd.md): nguồn có trước người dùng nó. Secret trước ClusterIssuer (issuer khỏi báo lỗi
+  # "secret not found"); ConfigMap root trước Bundle (Bundle khỏi báo lỗi nguồn thiếu ở lần sync đầu).
   - target:
       kind: SealedSecret
     patch: |-
       apiVersion: bitnami.com/v1alpha1
       kind: SealedSecret
+      metadata:
+        name: any
+        annotations:
+          argocd.argoproj.io/sync-wave: "-1"
+  - target:
+      kind: ConfigMap
+      name: lab-root-ca
+    patch: |-
+      apiVersion: v1
+      kind: ConfigMap
       metadata:
         name: any
         annotations:

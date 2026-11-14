@@ -1,0 +1,55 @@
+# Phân phối trust của lab (ADR-0014, docs/standards/cluster-entry.md mục "Phân phối trust"). Ticket G0-07.
+# trust-manager (app trust-manager) ghi mỗi Bundle thành ConfigMap CÙNG TÊN ở mọi namespace mang nhãn
+# trust.lab.internal/inject=true; nguồn configMap đọc ở trust namespace cert-manager.
+# Docs: https://cert-manager.io/docs/trust/trust-manager/, https://cert-manager.io/docs/trust/trust-manager/api-reference/
+#
+# namespaceSelector luôn theo nhãn, KHÔNG để trống: selector rỗng đồng bộ ra mọi namespace, và docs báo bản sau sẽ đổi
+# nghĩa thành "chỉ trust namespace" (đổi hành vi âm thầm khi nâng cấp).
+
+# lab-trust: cho JVM (và Envoy BackendTLSPolicy ở G0-10). Truststore toàn JVM THAY THẾ cacerts của JDK, nên phải gồm cả
+# CA công khai (useDefaultCAs: gói ca-certificates Debian 13 trong init container của trust-manager) cộng root lab.
+# Chart app mount vào /etc/trust/ và đặt -Djavax.net.ssl.trustStore=/etc/trust/bundle.p12 -Djavax.net.ssl.trustStoreType=PKCS12.
+apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
+metadata:
+  name: lab-trust
+spec:
+  sources:
+    - useDefaultCAs: true
+    - configMap:
+        name: lab-root-ca
+        key: ca.crt
+  target:
+    configMap:
+      key: ca-bundle.pem
+    additionalFormats:
+      pkcs12:
+        key: bundle.p12
+        # Mặc định LegacyRC2 ("Not supported by default in OpenSSL 3 or Java 20", API reference). Modern2023 là
+        # PBES2/AES-256-CBC + HMAC-SHA256, JDK 25 đọc được. Mật khẩu để rỗng (mặc định): truststore chỉ chứa chứng chỉ
+        # công khai, mật khẩu ở đây không bảo vệ gì (https://cert-manager.io/docs/faq/#keystore-passwords). Kết quả
+        # thử LegacyRC2 và mật khẩu rỗng trên JDK 25: docs/experiments/2026-11-g0.md mục 6.
+        profile: Modern2023
+    namespaceSelector:
+      matchLabels:
+        trust.lab.internal/inject: "true"
+---
+# lab-root: CHỈ root lab, cho Node (NODE_EXTRA_CA_CERTS=/etc/trust/lab-root-ca.pem). Biến này chỉ THÊM root vào bộ
+# root có sẵn của Node, không bớt được; trỏ nó vào gói CA công khai của trust-manager sẽ làm Node tin lại root mà bản
+# Node đã gỡ (như hai root eMudhra trong gói mặc định của trust-manager v0.25.0). Một Bundle chỉ ghi được một key PEM
+# nên tách Bundle thứ hai; chart app gộp hai ConfigMap vào /etc/trust/ bằng projected volume.
+apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
+metadata:
+  name: lab-root
+spec:
+  sources:
+    - configMap:
+        name: lab-root-ca
+        key: ca.crt
+  target:
+    configMap:
+      key: lab-root-ca.pem
+    namespaceSelector:
+      matchLabels:
+        trust.lab.internal/inject: "true"
