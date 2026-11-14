@@ -1,0 +1,8 @@
+# Bước 9 xóa file này khỏi Git để kiểm prune: ConfigMap phải biến khỏi cụm.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prune-me
+  namespace: sandbox
+data:
+  purpose: kiểm prune của ticket G0-03

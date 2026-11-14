@@ -1,0 +1,8 @@
+# Sandbox tạm của ticket G0-03 (bước 8–9), gỡ ở bước 11.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sandbox
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.37

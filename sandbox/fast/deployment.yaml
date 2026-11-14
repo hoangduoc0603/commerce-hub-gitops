@@ -1,0 +1,42 @@
+# Workload wave 2: Ready ngay. Bước 9 scale Deployment này về 0 để đo self-heal.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fast
+  namespace: sandbox
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fast
+  template:
+    metadata:
+      labels:
+        app: fast
+    spec:
+      terminationGracePeriodSeconds: 5
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: sleep
+          image: busybox:1.37.0
+          command: ["sleep", "604800"]
+          readinessProbe:
+            exec:
+              command: ["true"]
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 16Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
