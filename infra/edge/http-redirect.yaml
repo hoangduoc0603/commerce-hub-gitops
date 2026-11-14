@@ -1,0 +1,20 @@
+# Mọi request HTTP tới *.lab.internal được trả 301 sang https:// cùng host và path. Route duy nhất trên listener http
+# (listener chỉ nhận route cùng namespace edge), nên không app nào phục vụ nội dung qua HTTP thường.
+# Không khai `hostnames`: route thừa hưởng hostname *.lab.internal của listener.
+# 301 (vĩnh viễn) thay vì 302: lab không bao giờ quay lại HTTP; trình duyệt nhớ redirect.
+# https://gateway-api.sigs.k8s.io/guides/http-redirect-rewrite/
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: http-to-https
+  namespace: edge
+spec:
+  parentRefs:
+    - name: edge
+      sectionName: http
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301
