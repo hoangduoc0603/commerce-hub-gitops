@@ -1,0 +1,77 @@
+# AppProject của môi trường lab: ranh giới quyền giữa hạ tầng (platform) và service (commerce).
+# Áp lần đầu bằng lệnh bootstrap 2 (`kubectl apply -f apps/lab/projects.yaml -f apps/root-lab.yaml`),
+# sau đó root app quản lý file này. Không đặt trong bootstrap/argocd vì kubectl không tạo được CR
+# AppProject chung một lệnh với CRD của nó (ticket G0-03, bước 4).
+# Chuẩn: docs/standards/gitops-argocd.md, mục "AppProject: giới hạn nguồn và đích".
+# Docs: https://argo-cd.readthedocs.io/en/stable/user-guide/projects/
+#       https://argo-cd.readthedocs.io/en/stable/operator-manual/declarative-setup/#projects
+
+# default: khóa hoàn toàn. App quên khai `spec.project` rơi vào đây và bị từ chối,
+# thay vì nhận quyền mặc định (mọi repo, mọi cụm, mọi Kind). Manifest theo docs "The Default Project".
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: default
+  namespace: argocd
+spec:
+  description: Khóa. Mọi Application phải khai project platform hoặc commerce.
+  sourceRepos: []
+  sourceNamespaces: []
+  destinations: []
+  # Không khai clusterResourceWhitelist: allow-list rỗng là cấm mọi Kind cluster-scoped.
+  namespaceResourceBlacklist:
+    - group: '*'
+      kind: '*'
+---
+# platform: hạ tầng, chỉ admin. Được deploy vào namespace argocd nên tương đương quyền admin
+# (docs: "Projects which can deploy to the Argo CD namespace grant admin access"); vì vậy cho mọi Kind
+# thay vì liệt kê. Ranh giới thật là quyền push vào apps/ và bootstrap/ của repo gitops.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform
+  namespace: argocd
+  # Chặn xóa project khi còn Application tham chiếu tới nó.
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: Hạ tầng của lab (Argo CD, Sealed Secrets, cửa vào cụm, PostgreSQL, Kafka, LGTM, Keycloak). Chỉ admin.
+  sourceRepos:
+    - https://github.com/hoangduoc0603/commerce-hub-gitops.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: '*'
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+---
+# commerce: service nghiệp vụ, quyền hẹp nhất. Không tạo được tài nguyên cluster-scoped, chỉ deploy
+# vào namespace do platform tạo sẵn (allow-list, đóng mặc định), không tự đặt quota hay mở cửa vào riêng.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: commerce
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: Service nghiệp vụ, sinh bằng ApplicationSet. Mỗi service một namespace do platform tạo.
+  # Registry chart OCI (10.20.0.5:5000) thêm ở ticket G0-24, khi chốt dạng repoURL của chart.
+  sourceRepos:
+    - https://github.com/hoangduoc0603/commerce-hub-gitops.git
+  # Thêm service: thêm namespace ở đây trong cùng commit platform tạo namespace, quota, NetworkPolicy.
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: hello
+  clusterResourceWhitelist: []
+  namespaceResourceBlacklist:
+    # Hàng rào của namespace do platform đặt; service không tự nới.
+    - group: ''
+      kind: ResourceQuota
+    - group: ''
+      kind: LimitRange
+    # Cửa vào cụm thuộc platform (ADR-0013); service chỉ được tạo HTTPRoute gắn vào Gateway edge.
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+    - group: gateway.networking.k8s.io
+      kind: BackendTLSPolicy
