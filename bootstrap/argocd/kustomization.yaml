@@ -18,3 +18,5 @@ patches:
         name: any
   # Resource theo ngân sách ADR-0004
   - path: resources-patch.yaml
+  # Cấu hình argocd-cm (health check Lua cho Application)
+  - path: argocd-cm-patch.yaml

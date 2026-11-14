@@ -1,0 +1,25 @@
+# Bổ sung cấu hình vào argocd-cm của install.yaml (strategic merge: giữ nguyên các key có sẵn).
+#
+# Health check cho argoproj.io/Application: Argo CD gỡ check này từ 1.8, thiếu nó thì object Application
+# coi như Healthy ngay khi tạo, sync wave của root app (app-of-apps) không chờ app con Healthy.
+# Lua lấy nguyên văn từ docs v3.6.1; mặc định Progressing để app con chưa có status vẫn bị chờ.
+# https://argo-cd.readthedocs.io/en/stable/operator-manual/health/#argocd-app
+# Chuẩn: docs/standards/gitops-argocd.md, mục "Sync waves, hooks, health".
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+data:
+  resource.customizations.health.argoproj.io_Application: |
+    hs = {}
+    hs.status = "Progressing"
+    hs.message = ""
+    if obj.status ~= nil then
+      if obj.status.health ~= nil then
+        hs.status = obj.status.health.status
+        if obj.status.health.message ~= nil then
+          hs.message = obj.status.health.message
+        end
+      end
+    end
+    return hs
