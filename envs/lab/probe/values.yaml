@@ -1,0 +1,2 @@
+# TẠM (G0-03 bước 12): có values.yaml thì generator phải sinh app svc-probe.
+replicaCount: 1
