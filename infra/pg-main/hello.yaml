@@ -1,0 +1,104 @@
+# Database hello và bốn role của service hello trên pg-main (G0-08 bước 4). Mẫu cho mọi service G1: copy file này, đổi
+# tên, thêm hai SealedSecret và một dòng pg_hba trên Cluster (runbook "thêm service", bước 7).
+# Chuẩn: docs/standards/postgres-cnpg.md mục "Database và role", docs/standards/db-migration.md mục "Tách quyền migrate
+# và runtime". ADR-0003, ADR-0010.
+# Docs: https://cloudnative-pg.io/docs/1.30/declarative_role_management/,
+#       https://cloudnative-pg.io/docs/1.30/declarative_database_management/
+#
+# Thứ tự bằng sync wave (Argo CD chờ wave trước Healthy; health DatabaseRole ở argocd-cm, Database có sẵn):
+#   Cluster (0) → SealedSecret, role NOLOGIN (1) → role LOGIN, có inRoles (2) → Database, owner phải có sẵn (3).
+#   inRoles hay owner trỏ tới role chưa có là lỗi "unrealizable"; operator chỉ ghi status và thử lại.
+#
+# Chung cho mọi role: superuser/createdb/createrole/replication để mặc định false; databaseRoleReclaimPolicy để mặc định
+# retain (xóa nhầm CR không DROP ROLE). Role do CR quản lý: không sửa bằng ALTER ROLE (DatabaseRole không phát hiện drift).
+#
+# connectionLimit (bắt buộc ghi rõ, bỏ trống là -1): max_connections mặc định 100, trừ 3 superuser_reserved còn 97. G1 có
+# tới 7 database (5 service, Keycloak, marketplace-sim). Mỗi service 10 (_app) + 2 (_migrator) = 12, 6 database kiểu này
+# = 72, còn chỗ cho Keycloak (bước 7) mà tổng giới hạn vẫn dưới 97: một service chiếm hết kết nối không làm service khác
+# hết chỗ (ADR-0003, noisy neighbour).
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: hello-owner
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  cluster:
+    name: pg-main
+  name: hello_owner
+  comment: "hello: owner database, schema, bảng (NOLOGIN)"
+  # NOLOGIN, không passwordSecret (mật khẩu NULL). Migration làm việc bằng SET ROLE hello_owner để object mới thuộc
+  # owner chứ không thuộc migrator.
+  login: false
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: hello-lookup
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  cluster:
+    name: pg-main
+  name: hello_lookup
+  comment: "hello: chỉ sở hữu hàm SECURITY DEFINER tra cứu chéo Workspace (NOLOGIN, BYPASSRLS)"
+  # BYPASSRLS chỉ superuser cấp được nên phải qua CR. Không ai đăng nhập bằng role này: thuộc tính role (LOGIN,
+  # BYPASSRLS) không di truyền qua membership, nên migrator là thành viên vẫn không có BYPASSRLS; hàm SECURITY DEFINER
+  # chạy với quyền của owner hàm mới dùng tới nó (ADR-0010).
+  login: false
+  bypassrls: true
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: hello-migrator
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  cluster:
+    name: pg-main
+  name: hello_migrator
+  comment: "hello: Job Flyway PreSync, nối thẳng pg-main-rw"
+  login: true
+  # Thành viên của owner (SET ROLE hello_owner khi migrate) và lookup (SET ROLE hello_lookup khi tạo hàm tra cứu).
+  inRoles:
+    - hello_owner
+    - hello_lookup
+  # Flyway dùng 1 kết nối; 2 để hai Job chồng nhau (sync lặp, chạy tay) vẫn vào được, Flyway tự điều phối bằng lock.
+  connectionLimit: 2
+  passwordSecret:
+    name: pg-main-hello-migrator
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: hello-app
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  cluster:
+    name: pg-main
+  name: hello_app
+  comment: "hello: pod runtime qua Pooler, chỉ DML và EXECUTE hàm tra cứu"
+  login: true
+  # Bằng default_pool_size (10) của Pooler 1 pod: PgBouncer mở tối đa 10 kết nối server cho cặp hello_app/hello. Tăng
+  # Pooler lên 2 pod thì sửa thành 20 cùng commit.
+  connectionLimit: 10
+  passwordSecret:
+    name: pg-main-hello-app
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: hello
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  cluster:
+    name: pg-main
+  name: hello
+  owner: hello_owner
+  # retain (mặc định): xóa CR không DROP DATABASE. Không đặt ở đây quyền CONNECT: CR Database không quản lý quyền; chặn
+  # kết nối chéo database làm bằng pg_hba trên Cluster (bước 5, quyết định A).
+  databaseReclaimPolicy: retain

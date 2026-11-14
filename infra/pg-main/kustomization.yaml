@@ -4,3 +4,7 @@ namespace: postgres
 resources:
   - namespace.yaml
   - cluster.yaml
+  # Service hello: mật khẩu hai role LOGIN, bốn DatabaseRole và Database (G0-08 bước 4).
+  - pg-main-hello-migrator.sealedsecret.yaml
+  - pg-main-hello-app.sealedsecret.yaml
+  - hello.yaml
