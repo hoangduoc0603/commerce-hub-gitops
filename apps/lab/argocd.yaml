@@ -4,7 +4,7 @@
 # annotation 262144 byte); từ 3.6 tùy chọn này cũng bật Server-Side Diff.
 # Cố ý KHÔNG có finalizer resources-finalizer.argocd.argoproj.io: xóa app này không được kéo theo Argo CD.
 # Lối thoát khi một commit làm hỏng Argo CD: chạy lại lệnh bootstrap 1 từ bản Git tốt (--force-conflicts).
-# Docs: https://argo-cd.readthedocs.io/en/stable/operator-manual/declarative-setup/#manage-argo-cd-using-argo-cd
+# Docs: https://argo-cd.readthedocs.io/en/release-3.6/operator-manual/declarative-setup/#manage-argo-cd-using-argo-cd
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

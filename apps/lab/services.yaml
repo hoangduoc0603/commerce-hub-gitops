@@ -1,10 +1,10 @@
-# Sinh một Application cho mỗi service: thêm service = thêm thư mục envs/lab/<svc>/ có values.yaml.
+# Sinh một Application cho mỗi service: thêm service = thêm file envs/lab/<svc>/values.yaml.
 # Chuẩn: docs/standards/gitops-argocd.md, mục "Cấu trúc Application: app-of-apps + ApplicationSet".
-# Docs: https://argo-cd.readthedocs.io/en/stable/operator-manual/applicationset/Generators-Git/#git-generator-directories
+# Docs: https://argo-cd.readthedocs.io/en/release-3.6/operator-manual/applicationset/Generators-Git/#git-generator-files
 #
 # - `project: commerce` VIẾT CỨNG: CI của service ghi vào envs/ (ticket G0-24); nếu project lấy từ tham số,
 #   ai ghi được vào envs/ sẽ đưa app vào project lỏng hơn.
-#   https://argo-cd.readthedocs.io/en/stable/operator-manual/applicationset/Security/
+#   https://argo-cd.readthedocs.io/en/release-3.6/operator-manual/applicationset/Security/
 # - Tên app có tiền tố `svc-`: tên Application là duy nhất trong namespace argocd; thư mục envs/lab/argocd/
 #   không được sinh ra app trùng tên với app hạ tầng (vd. app argocd tự quản lý).
 # - Chart version chung cho mọi service: nâng chart là một commit ở đây (CI của chart chạy `ct install`, G0-21).
@@ -12,6 +12,10 @@
 # - App sinh ra tự có finalizer resources-finalizer (preserveResourcesOnDeletion mặc định false): xóa thư mục
 #   service là xóa app và resource của nó. Service không giữ dữ liệu (dữ liệu ở pg-main, thuộc platform).
 # - Wave 100: root tạo ApplicationSet sau mọi app hạ tầng (wave 1–10).
+# - Prune=false: root KHÔNG BAO GIỜ tự xóa ApplicationSet này. Xóa nó là xóa mọi app svc-* (ownerReference)
+#   và qua finalizer xóa luôn workload của mọi service; một commit lỡ xóa, đổi tên file này không được gây ra
+#   chuyện đó. Muốn gỡ thật thì xóa file khỏi Git rồi admin `kubectl delete applicationset` có chủ ý.
+#   https://argo-cd.readthedocs.io/en/release-3.6/user-guide/sync-options/#no-prune-resources
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -19,6 +23,7 @@ metadata:
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "100"
+    argocd.argoproj.io/sync-options: Prune=false
 spec:
   goTemplate: true
   # Tham số không tồn tại (gõ sai) thì báo lỗi, không thay bằng chuỗi rỗng.
@@ -27,8 +32,12 @@ spec:
     - git:
         repoURL: https://github.com/hoangduoc0603/commerce-hub-gitops.git
         revision: main
-        directories:
-          - path: envs/lab/*
+        # Files generator thay vì directories: chỉ thư mục đã có values.yaml mới sinh app (thư mục tạo dở
+        # không sinh app lỗi). Generator đọc cả nội dung values.yaml làm tham số; template chỉ dùng .path.*,
+        # nên values không chảy vào spec. Hệ quả: một values.yaml không phải YAML map hợp lệ làm generator lỗi
+        # và tạm ngừng thêm, bớt service (app đang có vẫn chạy và vẫn sync), Helm cũng sẽ từ chối file đó.
+        files:
+          - path: envs/lab/*/values.yaml
   template:
     metadata:
       name: 'svc-{{.path.basename}}'

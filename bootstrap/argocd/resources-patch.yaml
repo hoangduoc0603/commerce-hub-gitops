@@ -1,7 +1,9 @@
 # Resource của Argo CD trên home lab.
 # Memory theo bảng ngân sách G0–G1 (ADR-0004, docs/.scratch/architecture-g0-g1/issues/04-resource-budget.md#answer):
 # memory request = limit (docs/standards/helm-chart.md); không đặt CPU limit để tránh throttling.
-# CPU request là ước lượng ban đầu, chỉnh theo số đo `kubectl top` ở ticket G0-03 bước 5.
+# CPU request: đo ở G0-03 (2026-11-14) lúc rảnh mỗi thành phần chỉ 1–2m, nhưng cố ý giữ 250m/100m/50m.
+# Request CPU là phần được bảo đảm khi node tranh chấp, không phải trần (không có CPU limit). Controller
+# và repo-server cần CPU lúc sync, render Helm, Kustomize. Tổng 500m. Chỉnh khi có số đo lúc tải ở ticket G0-34.
 # Init container đặt bằng container chính cùng pod: request hiệu lực của pod là
 # max(init lớn nhất, tổng container chính), nên không tốn thêm ngân sách.
 #

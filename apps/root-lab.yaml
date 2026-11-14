@@ -5,7 +5,7 @@
 # Sửa file này thì admin chạy lại lệnh bootstrap 2.
 # Cố ý KHÔNG có finalizer resources-finalizer.argocd.argoproj.io: xóa nhầm root chỉ làm app con mồ côi,
 # không cascade xóa hạ tầng.
-# Docs: https://argo-cd.readthedocs.io/en/stable/operator-manual/cluster-bootstrapping/
+# Docs: https://argo-cd.readthedocs.io/en/release-3.6/operator-manual/cluster-bootstrapping/
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

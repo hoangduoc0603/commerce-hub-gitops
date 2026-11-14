@@ -1,6 +1,6 @@
 # Bootstrap Argo CD
 
-Runbook dựng Argo CD trên một cụm chưa có Argo CD. Có **hai lệnh thay đổi cụm**, xen giữa là hai lệnh chỉ chờ. Sau hai lệnh đó, mọi thay đổi đều đi qua Git: Argo CD tự quản lý chính nó (`apps/lab/argocd.yaml`), và root app `root-lab` quản lý mọi thứ trong `apps/lab/`.
+Runbook dựng Argo CD trên một cụm chưa có Argo CD. Có **hai lệnh thay đổi cụm**, xen giữa là các lệnh chỉ chờ. Sau hai lệnh đó, mọi thay đổi đều đi qua Git: Argo CD tự quản lý chính nó (`apps/lab/argocd.yaml`), và root app `root-lab` quản lý mọi thứ trong `apps/lab/`.
 
 Ticket: G0-03. Phiên bản: Argo CD v3.6.1. Diễn tập ngày 2026-11-14 trên cụm `homelab`.
 
@@ -8,7 +8,8 @@ Ticket: G0-03. Phiên bản: Argo CD v3.6.1. Diễn tập ngày 2026-11-14 trên
 
 - `kubectl config current-context` là `homelab`, và tài khoản có quyền cluster-admin.
 - Cụm đạt ticket G0-02: kubeadm, Calico, MetalLB, local-path. Cài cụm theo `docs/homelab-hyperv.md` trong repo `platform`.
-- Node ra được internet tới `raw.githubusercontent.com` và `github.com` (repo này public), cùng các registry image `quay.io`, `ghcr.io` và `public.ecr.aws`.
+- Pod `argocd-repo-server` ra được `github.com` để đọc repo này (public). Manifest Argo CD đã vendor trong `bootstrap/argocd/upstream/`, nên lệnh 1 không tải gì từ GitHub.
+- Node kéo được image `quay.io/argoproj/argocd:v3.6.1` và `public.ecr.aws/docker/library/redis:8.10.1-alpine`. Dex (`ghcr.io`) đã bị patch gỡ, nên không cần.
 - Chạy mọi lệnh ở thư mục gốc repo này, trên commit đang có ở `origin/main`.
 
 ## Dựng
@@ -76,9 +77,18 @@ argocd login localhost:8080 --username admin                # nhận chứng ch�
 ### Nâng Argo CD
 
 1. Đọc trang [upgrade](https://argo-cd.readthedocs.io/en/stable/operator-manual/upgrading/overview/) của **từng** minor nằm giữa bản cũ và bản mới.
-2. Sửa tag trong URL `install.yaml` ở `bootstrap/argocd/kustomization.yaml`, rồi commit.
+2. Thay bản vendor bằng `install.yaml` của tag mới, rồi xem diff:
 
-App `argocd` tự áp thay đổi đó. Không chạy lệnh tay.
+   ```bash
+   curl -fsSL -o bootstrap/argocd/upstream/install.yaml \
+     https://raw.githubusercontent.com/argoproj/argo-cd/vX.Y.Z/manifests/install.yaml
+   shasum -a 256 bootstrap/argocd/upstream/install.yaml
+   kubectl diff --server-side --force-conflicts -k bootstrap/argocd
+   ```
+
+3. Cập nhật phiên bản và sha256 trong comment của `kustomization.yaml`, cùng phiên bản trong file này, rồi commit.
+
+App `argocd` tự áp thay đổi đó. Không chạy lệnh tay áp lên cụm. Diff của `upstream/install.yaml` trong commit chính là danh sách những gì bản mới thay đổi.
 
 ### Sửa tài nguyên Argo CD
 

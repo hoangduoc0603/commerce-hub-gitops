@@ -3,8 +3,8 @@
 # sau đó root app quản lý file này. Không đặt trong bootstrap/argocd vì kubectl không tạo được CR
 # AppProject chung một lệnh với CRD của nó (ticket G0-03, bước 4).
 # Chuẩn: docs/standards/gitops-argocd.md, mục "AppProject: giới hạn nguồn và đích".
-# Docs: https://argo-cd.readthedocs.io/en/stable/user-guide/projects/
-#       https://argo-cd.readthedocs.io/en/stable/operator-manual/declarative-setup/#projects
+# Docs: https://argo-cd.readthedocs.io/en/release-3.6/user-guide/projects/
+#       https://argo-cd.readthedocs.io/en/release-3.6/operator-manual/declarative-setup/#projects
 # Sync wave -1: root áp project trước các Application dùng nó (app argocd wave 0, hạ tầng từ wave 1).
 
 # default: khóa hoàn toàn. App quên khai `spec.project` rơi vào đây và bị từ chối,
@@ -86,3 +86,10 @@ spec:
       kind: Gateway
     - group: gateway.networking.k8s.io
       kind: BackendTLSPolicy
+    # RBAC trong namespace: không cấm thì service tạo RoleBinding trỏ ClusterRole cluster-admin cho
+    # ServiceAccount của mình, rồi từ trong pod sửa chính các Kind ở trên (blacklist chỉ chặn đường qua
+    # Argo CD). Chart app chỉ tạo ServiceAccount, không tạo Role (docs/standards/helm-chart.md).
+    - group: rbac.authorization.k8s.io
+      kind: Role
+    - group: rbac.authorization.k8s.io
+      kind: RoleBinding
