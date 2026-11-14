@@ -1,0 +1,39 @@
+# CRD Gateway API v1.6.1 standard channel: API chuẩn cho cửa vào cụm (ADR-0013).
+# Ticket G0-05. Chuẩn: docs/standards/cluster-entry.md mục "Gateway API CRD và Envoy Gateway",
+# docs/standards/gitops-argocd.md mục "App platform: cửa vào cụm và PKI".
+#
+# - Wave 2: sau Sealed Secrets (1), trước cert-manager (3, G0-06) và Envoy Gateway (4). cert-manager chỉ bật
+#   Gateway API nếu CRD có trước lúc nó khởi động; Envoy Gateway v1.10 yêu cầu CRD v1.6 có trước.
+# - ServerSideApply=true: CRD httproutes vượt giới hạn 262 144 byte của annotation last-applied-configuration
+#   mà client-side apply ghi. https://gateway.envoyproxy.io/docs/install/install-argocd/
+# - Không dùng experimental channel (ValidatingAdmissionPolicy safe-upgrades trong bản vendor cũng chặn).
+# - Có finalizer (app con của platform): xóa app chỉ xóa ValidatingAdmissionPolicy; CRD có Delete=false.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gateway-api-crds
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  source:
+    repoURL: https://github.com/hoangduoc0603/commerce-hub-gitops.git
+    targetRevision: main
+    path: infra/gateway-api-crds
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
