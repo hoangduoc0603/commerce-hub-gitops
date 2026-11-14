@@ -25,10 +25,13 @@ spec:
     additionalFormats:
       pkcs12:
         key: bundle.p12
-        # Mặc định LegacyRC2 ("Not supported by default in OpenSSL 3 or Java 20", API reference). Modern2023 là
-        # PBES2/AES-256-CBC + HMAC-SHA256, JDK 25 đọc được. Mật khẩu để rỗng (mặc định): truststore chỉ chứa chứng chỉ
-        # công khai, mật khẩu ở đây không bảo vệ gì (https://cert-manager.io/docs/faq/#keystore-passwords). Kết quả
-        # thử LegacyRC2 và mật khẩu rỗng trên JDK 25: docs/experiments/2026-11-g0.md mục 6.
+        # Mật khẩu để rỗng (mặc định): truststore chỉ chứa chứng chỉ công khai, mật khẩu không bảo vệ gì
+        # (https://cert-manager.io/docs/faq/#keystore-passwords). Đo ở G0-07 (docs/experiments/2026-11-g0.md mục 6):
+        # - Mật khẩu rỗng → trust-manager ghi PKCS12 KHÔNG mã hóa, KHÔNG MAC; profile không có tác dụng (LegacyRC2 và
+        #   Modern2023 ra file giống từng byte). JDK 25 đọc được mà không cần javax.net.ssl.trustStorePassword.
+        # - Nếu sau này đặt mật khẩu: JVM PHẢI có trustStorePassword, thiếu thì JDK nạp store rỗng và mọi TLS hỏng
+        #   ("the trustAnchors parameter must be non-empty"). LegacyRC2 (mặc định) JDK 25 vẫn đọc được nhưng OpenSSL 3
+        #   thì không ("unknown cipher RC2-40-CBC"); vì vậy ghim sẵn Modern2023 (PBES2/AES-256-CBC + HMAC-SHA256).
         profile: Modern2023
     namespaceSelector:
       matchLabels:
