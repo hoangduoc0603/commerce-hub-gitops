@@ -4,6 +4,12 @@
 # CPU request là ước lượng ban đầu, chỉnh theo số đo `kubectl top` ở ticket G0-03 bước 5.
 # Init container đặt bằng container chính cùng pod: request hiệu lực của pod là
 # max(init lớn nhất, tổng container chính), nên không tốn thêm ngân sách.
+#
+# GOMEMLIMIT ≈ 90% memory limit cho mọi thành phần viết bằng Go (Redis thì không). Không có nó, Go runtime
+# không biết trần của container: chỉ gom rác theo GOGC=100 và giữ lại bộ nhớ đã gom, nên working set có thể
+# chạm limit và bị OOMKilled dù dữ liệu sống còn ít (G0-03 bước 8: controller 451Mi working set nhưng
+# heap_alloc chỉ 131MiB). Chừa ~10% cho phần ngoài heap Go quản lý không hết (stack, cgo, page cache).
+# ĐỔI LIMIT THÌ ĐỔI LUÔN GOMEMLIMIT. https://go.dev/doc/gc-guide#Memory_limit
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -13,6 +19,9 @@ spec:
     spec:
       containers:
         - name: argocd-application-controller
+          env:
+            - name: GOMEMLIMIT
+              value: 460MiB
           resources:
             requests:
               cpu: 250m
@@ -37,6 +46,9 @@ spec:
               memory: 256Mi
       containers:
         - name: argocd-repo-server
+          env:
+            - name: GOMEMLIMIT
+              value: 230MiB
           resources:
             requests:
               cpu: 100m
@@ -53,6 +65,9 @@ spec:
     spec:
       containers:
         - name: argocd-server
+          env:
+            - name: GOMEMLIMIT
+              value: 115MiB
           resources:
             requests:
               cpu: 50m
@@ -93,6 +108,9 @@ spec:
     spec:
       containers:
         - name: argocd-applicationset-controller
+          env:
+            - name: GOMEMLIMIT
+              value: 58MiB
           resources:
             requests:
               cpu: 50m
