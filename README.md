@@ -4,6 +4,7 @@ Nguồn sự thật cho Argo CD: hệ thống chạy gì, ở môi trường nà
 
 | Thư mục | Dùng cho |
 |---|---|
+| `bootstrap/` | Cài Argo CD lên cụm trống bằng hai lệnh; runbook ở [`bootstrap/README.md`](bootstrap/README.md) |
 | `apps/` | Argo CD `Application` (app-of-apps) |
 | `envs/<môi trường>/<service>/` | Values cho chart, image tag, overlay theo môi trường (ví dụ `envs/local/order/values.yaml`) |
 
