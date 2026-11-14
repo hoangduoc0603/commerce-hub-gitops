@@ -1,0 +1,28 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  # 11 CRD postgresql.cnpg.io tách nguyên văn từ asset cnpg-1.30.1.yaml của release v1.30.1 (asset sha256 37237f14…87759255,
+  # file này sha256 31b34d3a…68e4f650, tải 2026-11-15). Đã so: giống hệt templates/crds/crds.yaml của chart 0.29.1 trừ
+  # annotation helm.sh/resource-policy: keep (chỉ có tác dụng với `helm uninstall`, Argo CD không đọc). Chưa kiểm chữ ký
+  # cosign của asset (máy chưa có cosign; lệnh kiểm ở docs Installation – Verifying release assets).
+  # Không cài từ chart (crds.create=false) vì chart không có value cho annotation của CRD.
+  # NÂNG CẤP: tách lại từ asset cnpg-<version>.yaml của tag mới (chỉ giữ document kind CustomResourceDefinition), xem diff,
+  # sửa sha256, cùng commit với targetRevision chart và digest image trong apps/lab/cloudnative-pg.yaml.
+  - upstream/cnpg-1.30.1.crds.yaml
+patches:
+  # Xóa CRD clusters.postgresql.cnpg.io là xóa mọi Cluster, rồi GC xóa pod và object con theo ownerReference (PVC có
+  # ownerReference về Cluster hay không: kiểm ở G0-08 bước 3); mất pg-main là mất database của mọi service.
+  # Tương tự Database, DatabaseRole (reclaim retain chỉ giữ object trong PostgreSQL khi CR bị xóa có kiểm soát), Backup.
+  # Prune=false chặn commit lỡ; Delete=false chặn cascade khi xóa app.
+  # https://argo-cd.readthedocs.io/en/release-3.6/user-guide/sync-options/#no-prune-resources
+  - target:
+      group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+    patch: |-
+      apiVersion: apiextensions.k8s.io/v1
+      kind: CustomResourceDefinition
+      metadata:
+        name: any
+        annotations:
+          argocd.argoproj.io/sync-options: Prune=false,Delete=false

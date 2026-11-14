@@ -1,0 +1,15 @@
+# Namespace của operator CloudNativePG (tên mặc định trong docs). Cluster pg-main nằm ở namespace postgres (app pg-main),
+# không ở đây. Do platform tạo, app không dùng CreateNamespace.
+# - Pod Security restricted: securityContext mặc định của chart 0.29.1 (runAsNonRoot, runAsUser 10001, seccomp
+#   RuntimeDefault, drop ALL, readOnlyRootFilesystem, không privilege escalation) đạt mức này.
+# - Prune=false: commit lỡ làm file này biến mất không xóa namespace (xóa namespace là mất operator, mọi Cluster ngừng
+#   được reconcile và webhook Fail chặn mọi thay đổi CR).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cnpg-system
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.37
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false

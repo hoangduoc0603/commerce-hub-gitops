@@ -1,0 +1,74 @@
+# CloudNativePG 1.30.1: operator PostgreSQL. Đọc CR Cluster, Database, DatabaseRole, Pooler (app pg-main, namespace
+# postgres) rồi dựng pod, PVC, Service -rw/-ro/-r, chứng chỉ TLS, PDB và role trong PostgreSQL.
+# Ticket G0-08. Chuẩn: docs/standards/postgres-cnpg.md mục "Operator". ADR-0003, ADR-0004.
+# Docs: https://cloudnative-pg.io/docs/1.30/installation_upgrade/, https://github.com/cloudnative-pg/charts
+#
+# - Wave 6: sau trust-manager (4) và lab-ca, edge (5); trước CR dữ liệu (pg-main, wave 7). CRD và webhook phải có trước khi
+#   apply Cluster.
+# - Chart Helm thay vì manifest cnpg-1.30.1.yaml (phải patch resources, digest bằng Kustomize) hay OLM (thêm một
+#   controller). Chart 0.29.1 có appVersion 1.30.1.
+# - ServerSideApply=true: CRD clusters.postgresql.cnpg.io lớn, client-side apply sẽ vượt giới hạn 262 144 byte của
+#   annotation last-applied-configuration. Docs cài bằng `kubectl apply --server-side`.
+# - Lệch chuẩn có chủ đích (ADR-0004): 1 replica, trong khi webhook mutating và validating của chart có failurePolicy Fail.
+#   Operator chết thì API server từ chối tạo hoặc sửa Cluster, Database, DatabaseRole, Pooler tới khi pod lên lại (Argo CD
+#   retry); PostgreSQL đang chạy không bị ảnh hưởng. Ghi ở postgres-cnpg.md mục lệch chuẩn.
+# - K8s 1.37 chỉ ở cột "Tested, but not supported" của 1.30.x (docs Supported releases); nâng 1.31 khi ra.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cloudnative-pg
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  sources:
+    # NÂNG CẤP: đổi cùng commit targetRevision, digest image dưới đây và CRD vendor trong infra/cloudnative-pg/upstream/;
+    # đọc mục "Upgrades" của docs bản mới (có bản đòi thao tác trước khi nâng) và bảng Supported releases.
+    # Gói chart cloudnative-pg-0.29.1.tgz sha256 b53d3991fe84bcf38767e7702cae78666265427a127a26fff168ab4207d2b1df.
+    - repoURL: https://cloudnative-pg.github.io/charts
+      chart: cloudnative-pg
+      targetRevision: 0.29.1
+      helm:
+        releaseName: cnpg
+        valuesObject:
+          # CRD vendor ở source thứ hai để gắn Prune=false,Delete=false.
+          crds:
+            create: false
+          # Chart không có field digest; tag dạng "<tag>@<digest>" cho ra image ghim digest (docs/standards/helm-chart.md).
+          # Cùng chuỗi đi vào biến OPERATOR_IMAGE_NAME, mà operator dùng làm image cho init container bootstrap của pod
+          # PostgreSQL, nên instance manager trong pod pg-main cũng ghim digest này. Digest là image index đa kiến trúc.
+          image:
+            tag: 1.30.1@sha256:923c267ec29636db3bee20f993d0ec4973fa22998e1adad37da79e4d32b5bc07
+          # Ngân sách 200 Mi (ticket 04 của map). Memory requests = limits; CPU không đặt limit (tránh throttle). GOMEMLIMIT
+          # khoảng 90% limit để GC của Go thu dọn trước khi chạm limit cgroup.
+          resources:
+            requests:
+              cpu: 50m
+              memory: 200Mi
+            limits:
+              memory: 200Mi
+          additionalEnv:
+            - name: GOMEMLIMIT
+              value: 180MiB
+    # Namespace và CRD do platform tạo (không CreateNamespace).
+    - repoURL: https://github.com/hoangduoc0603/commerce-hub-gitops.git
+      targetRevision: main
+      path: infra/cloudnative-pg
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cnpg-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

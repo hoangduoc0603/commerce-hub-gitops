@@ -54,6 +54,8 @@ spec:
     - docker.io/envoyproxy
     # cert-manager: chart OCI quay.io/jetstack/charts/cert-manager (G0-06)
     - quay.io/jetstack/charts
+    # CloudNativePG: chart cloudnative-pg (G0-08)
+    - https://cloudnative-pg.github.io/charts
   destinations:
     - server: https://kubernetes.default.svc
       namespace: '*'
@@ -109,3 +111,8 @@ spec:
       kind: Role
     - group: rbac.authorization.k8s.io
       kind: RoleBinding
+    # CloudNativePG (G0-08): database của service nằm trên pg-main do platform quản lý (ADR-0003). DatabaseRole, Database,
+    # Pooler phải cùng namespace với Cluster nên từ namespace service không chạm được pg-main, nhưng service vẫn có thể tự
+    # dựng một Cluster riêng (RAM ngoài ngân sách ADR-0004) hoặc Backup ra đích tùy ý. Chặn cả group.
+    - group: postgresql.cnpg.io
+      kind: '*'
