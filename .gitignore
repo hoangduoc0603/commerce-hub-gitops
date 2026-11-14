@@ -21,3 +21,12 @@ tailscale-authkey*
 sealed-secrets-key*
 *.key
 # <<< commerce-hub baseline <<<
+
+# Sealed Secrets (G0-04). Quy trình seal là pipe `kubectl create secret … --dry-run=client -o yaml | kubeseal`,
+# Secret dạng rõ không chạm đĩa. Nếu buộc phải ra file trung gian, đặt tên theo các mẫu dưới để Git không nhận.
+# Bản sao lưu khóa sealing (sealing-key-backup-*.yaml) chứa private key: cất trong password manager, không ở đây.
+# Lưới thứ hai theo nội dung: scripts/check-no-plain-secrets.sh. Lưới thứ ba: push protection của GitHub.
+*.plain.yaml
+*.unsealed.yaml
+*-secret.yaml
+sealing-key-backup*
