@@ -52,6 +52,8 @@ spec:
     - https://bitnami.github.io/sealed-secrets
     # Envoy Gateway: chart OCI gateway-helm, gateway-crds-helm (G0-05)
     - docker.io/envoyproxy
+    # cert-manager: chart OCI quay.io/jetstack/charts/cert-manager (G0-06)
+    - quay.io/jetstack/charts
   destinations:
     - server: https://kubernetes.default.svc
       namespace: '*'

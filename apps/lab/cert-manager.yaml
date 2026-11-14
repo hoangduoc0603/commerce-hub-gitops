@@ -1,0 +1,112 @@
+# cert-manager v1.21.3: cấp và gia hạn chứng chỉ từ ClusterIssuer lab-ca (app lab-ca), kể cả chứng chỉ wildcard
+# của Gateway edge sinh từ annotation trên Gateway (gateway-shim).
+# Ticket G0-06. Chuẩn: docs/standards/cluster-entry.md mục "PKI và cert-manager", ADR-0014.
+# Docs: https://cert-manager.io/docs/installation/helm/, https://cert-manager.io/docs/usage/gateway/
+#
+# - Wave 3: sau CRD Gateway API (2). cert-manager chỉ bật controller gateway-shim nếu CRD Gateway API có sẵn LÚC KHỞI
+#   ĐỘNG; CRD đến sau thì phải restart tay. Trước Envoy Gateway (4) và lab-ca, edge (5).
+# - Lệch chuẩn có chủ đích: v1.21 chỉ ghi hỗ trợ Kubernetes 1.33–1.36, cụm chạy 1.37. 1.22 chưa phát hành (tra
+#   2026-11-15, GitHub releases). Chuyển sang 1.22 khi bản này ghi hỗ trợ 1.37.
+#   https://cert-manager.io/docs/installation/supported-releases/
+# - Chart OCI trên quay.io, repoURL không có tiền tố oci:// (Argo CD coi repoURL không scheme là Helm OCI), như
+#   envoy-gateway. Docs cert-manager khuyên registry OCI thay cho charts.jetstack.io.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  sources:
+    # NÂNG CẤP: đổi cùng commit targetRevision, bốn digest image dưới đây và CRD vendor trong infra/cert-manager/upstream/;
+    # đọc release notes (đặc biệt mục thay đổi giá trị mặc định) trước khi push.
+    # Digest gói chart (OCI manifest): sha256 e482675aec32862d323a9218293ff7de81192337998615e4378c56498473f240
+    - repoURL: quay.io/jetstack/charts
+      chart: cert-manager
+      targetRevision: v1.21.3
+      helm:
+        releaseName: cert-manager
+        valuesObject:
+          crds:
+            enabled: false
+          global:
+            # Mặc định chart là kube-system. Để Lease trong namespace của chính nó: RBAC của cert-manager không phải
+            # với sang kube-system.
+            leaderElection:
+              namespace: cert-manager
+          # ControllerConfiguration (chart ghi ra ConfigMap, truyền bằng --config). Bật gateway-shim: cert-manager đọc
+          # annotation cert-manager.io/cluster-issuer trên Gateway và tạo Certificate cho từng listener HTTPS.
+          config:
+            apiVersion: controller.config.cert-manager.io/v1alpha1
+            kind: ControllerConfiguration
+            gatewayAPI:
+              enabled: true
+          # Image index đa kiến trúc ghim digest (docs/standards/helm-chart.md); chart ghép tag@digest, kéo theo digest.
+          image:
+            digest: sha256:9f4f96a33c7774cef24466fcd85031997531a03a8d117f151126baa8d1290dcc
+          # ADR-0004: cert-manager 3 × 64 Mi, request = limit, không CPU limit. GOMEMLIMIT ~90% limit để GC biết trần
+          # (như Argo CD, Envoy Gateway). Chart để trống resources (pod BestEffort).
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 64Mi
+          extraEnv:
+            - name: GOMEMLIMIT
+              value: 57MiB
+          webhook:
+            image:
+              digest: sha256:055ac8e9de6a0ba6763794838fe38944acc650f68ebe1b01dd8be079e580f458
+            resources:
+              requests:
+                cpu: 10m
+                memory: 64Mi
+              limits:
+                memory: 64Mi
+            extraEnv:
+              - name: GOMEMLIMIT
+                value: 57MiB
+          cainjector:
+            image:
+              digest: sha256:083d0e906f8eb44e255fe4ff817ae54e49f9ed82e22f1011bb4e9e4f4b8a641f
+            resources:
+              requests:
+                cpu: 10m
+                memory: 64Mi
+              limits:
+                memory: 64Mi
+            extraEnv:
+              - name: GOMEMLIMIT
+                value: 57MiB
+          # Lab không dùng ACME; controller chỉ nhận image này qua cờ. Ghim để cấu hình không còn tag trôi.
+          acmesolver:
+            image:
+              digest: sha256:c8c1225bb2fe8ab37a330b77f0d8c2ee6a41210fcb54fc07ca606ab9a022b8b7
+          # Tắt Job startupapicheck. Nó là Helm hook post-install: Argo CD chạy nó như PostSync ở MỌI lần sync, kèm
+          # ServiceAccount và RBAC dạng hook (không được Argo CD theo dõi, xem lệch chuẩn hook ở cluster-entry.md).
+          # Nó cũng không chặn được wave sau: root chờ HEALTH của app con, không chờ PostSync. Rủi ro còn lại (webhook
+          # chưa nhận CA từ cainjector khi app lab-ca tạo ClusterIssuer) đã có retry của app lab-ca lo.
+          startupapicheck:
+            enabled: false
+    # Namespace cert-manager và CRD vendor (Prune=false,Delete=false).
+    - repoURL: https://github.com/hoangduoc0603/commerce-hub-gitops.git
+      targetRevision: main
+      path: infra/cert-manager
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cert-manager
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

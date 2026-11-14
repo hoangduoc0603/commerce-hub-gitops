@@ -1,0 +1,15 @@
+# Namespace của cert-manager, cũng là "cluster resource namespace": Secret mà ClusterIssuer đọc (lab-intermediate-ca,
+# app lab-ca) phải nằm ở đây. https://cert-manager.io/docs/configuration/ca/
+# Do platform tạo, app không dùng CreateNamespace. trust-manager (G0-07) cũng cài vào đây.
+# - Pod Security restricted: securityContext mặc định của chart v1.21.3 (runAsNonRoot, seccomp RuntimeDefault, drop ALL,
+#   readOnlyRootFilesystem) đạt mức này.
+# - Prune=false: commit lỡ làm file này biến mất không xóa namespace (xóa namespace là mất khóa CA trong cụm).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cert-manager
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.37
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
