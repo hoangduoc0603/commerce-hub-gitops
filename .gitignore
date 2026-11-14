@@ -24,9 +24,10 @@ sealed-secrets-key*
 
 # Sealed Secrets (G0-04). Quy trình seal là pipe `kubectl create secret … --dry-run=client -o yaml | kubeseal`,
 # Secret dạng rõ không chạm đĩa. Nếu buộc phải ra file trung gian, đặt tên theo các mẫu dưới để Git không nhận.
+# Cố ý KHÔNG có mẫu kiểu `*-secret.yaml`: nó nuốt luôn file SealedSecret đặt tên như vậy, Git bỏ qua không báo
+# và app deploy thiếu Secret (code-review G0-04). File SealedSecret đặt tên `<tên>-sealedsecret.yaml`.
 # Bản sao lưu khóa sealing (sealing-key-backup-*.yaml) chứa private key: cất trong password manager, không ở đây.
 # Lưới thứ hai theo nội dung: scripts/check-no-plain-secrets.sh. Lưới thứ ba: push protection của GitHub.
 *.plain.yaml
 *.unsealed.yaml
-*-secret.yaml
 sealing-key-backup*

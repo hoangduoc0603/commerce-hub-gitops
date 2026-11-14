@@ -17,6 +17,9 @@ set -euo pipefail
 umask 077
 
 NS=kube-system
+# Mọi lệnh gọi cụm có timeout: không có nó, kubectl trỏ tới server không trả lời sẽ treo vô hạn (thấy khi thử
+# context chết ở G0-04), để lại file dở và người chạy không biết vì sao.
+TIMEOUT=30s
 LABEL=sealedsecrets.bitnami.com/sealed-secrets-key
 DEST=${1:-"$HOME/.commerce-hub/sealing-keys"}
 
@@ -32,17 +35,23 @@ mkdir -p "$DEST"
 chmod 700 "$DEST"
 
 ctx=$(kubectl config current-context)
+# Tên context có thể chứa `/`, `:` (ARN của EKS, `user@cluster/ns`): thay bằng `_` để không thành thư mục con.
+safe_ctx=${ctx//[^A-Za-z0-9._-]/_}
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
-out="$DEST/sealing-key-backup-$ctx-$stamp.yaml"
+out="$DEST/sealing-key-backup-$safe_ctx-$stamp.yaml"
 
-kubectl get secret -n "$NS" -l "$LABEL" -o yaml \
+# Lỗi ở bất kỳ bước nào (context sai, token hết hạn, fingerprint lệch) thì xóa file dở: một file rỗng mang tên
+# giống bản sao lưu thật dễ bị đưa nhầm vào password manager.
+ok=0
+trap '[[ $ok -eq 1 ]] || rm -f "$out"' EXIT
+
+kubectl get secret --request-timeout="$TIMEOUT" -n "$NS" -l "$LABEL" -o yaml \
   | yq 'del(.metadata) | del(.items[].metadata.resourceVersion, .items[].metadata.uid,
         .items[].metadata.creationTimestamp, .items[].metadata.managedFields)' >"$out"
 
 n=$(yq '.items | length' "$out")
 if [[ "$n" -lt 1 ]]; then
   echo "Lỗi: không có khóa nào mang nhãn $LABEL trong $NS." >&2
-  rm -f "$out"
   exit 1
 fi
 
@@ -50,9 +59,9 @@ fp() { openssl x509 -noout -fingerprint -sha256 | cut -d= -f2; }
 
 # Đối chiếu: fingerprint trong file phải trùng trên cụm, và cert đang dùng để seal phải có trong file.
 backup_fps=$(for i in $(seq 0 $((n - 1))); do yq ".items[$i].data.\"tls.crt\"" "$out" | base64 -d | fp; done | sort)
-cluster_fps=$(kubectl get secret -n "$NS" -l "$LABEL" -o jsonpath='{range .items[*]}{.data.tls\.crt}{"\n"}{end}' \
+cluster_fps=$(kubectl get secret --request-timeout="$TIMEOUT" -n "$NS" -l "$LABEL" -o jsonpath='{range .items[*]}{.data.tls\.crt}{"\n"}{end}' \
   | while read -r c; do echo "$c" | base64 -d | fp; done | sort)
-active_fp=$(kubeseal --fetch-cert | fp)
+active_fp=$(kubeseal --request-timeout="$TIMEOUT" --fetch-cert | fp)
 
 if [[ "$backup_fps" != "$cluster_fps" ]]; then
   echo "Lỗi: fingerprint trong bản sao lưu khác trên cụm." >&2
@@ -63,6 +72,7 @@ if ! grep -qx "$active_fp" <<<"$backup_fps"; then
   exit 1
 fi
 
+ok=1
 echo "Đã sao lưu $n khóa vào $out"
 echo "sha256 file: $(shasum -a 256 "$out" | cut -d' ' -f1)"
 echo "Fingerprint (SHA-256) các cert trong bản sao lưu:"
