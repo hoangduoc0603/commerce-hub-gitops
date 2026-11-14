@@ -1,5 +1,8 @@
 # Bổ sung cấu hình vào argocd-cm của install.yaml (strategic merge: giữ nguyên các key có sẵn).
 #
+# url: địa chỉ công khai của Argo CD qua Gateway edge (G0-06). Argo CD dùng nó dựng redirect URI cho SSO (G0-12) và
+# link trong UI. https://argo-cd.readthedocs.io/en/release-3.6/operator-manual/ingress/
+#
 # Health check cho argoproj.io/Application: Argo CD gỡ check này từ 1.8, thiếu nó thì object Application
 # coi như Healthy ngay khi tạo, sync wave của root app (app-of-apps) không chờ app con Healthy.
 # Lua lấy nguyên văn từ docs v3.6.1; mặc định Progressing để app con chưa có status vẫn bị chờ.
@@ -10,6 +13,7 @@ kind: ConfigMap
 metadata:
   name: argocd-cm
 data:
+  url: https://argocd.lab.internal
   resource.customizations.health.argoproj.io_Application: |
     hs = {}
     hs.status = "Progressing"

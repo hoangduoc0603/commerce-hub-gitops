@@ -8,3 +8,4 @@ resources:
   - gatewayclass.yaml
   - gateway.yaml
   - http-redirect.yaml
+  - argocd-route.yaml

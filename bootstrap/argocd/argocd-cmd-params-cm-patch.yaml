@@ -1,0 +1,14 @@
+# Tham số dòng lệnh của các thành phần Argo CD (strategic merge vào argocd-cmd-params-cm rỗng của install.yaml).
+#
+# server.insecure: argocd-server phục vụ HTTP thường; Envoy (Gateway edge) giải mã TLS ở biên rồi chuyển vào
+# (edge termination). Thiếu cờ này thì Envoy nói HTTP tới cổng đang chờ TLS và trả lỗi. Lệch chuẩn có chủ đích:
+# traffic Envoy → argocd-server không mã hóa trong mạng pod; NetworkPolicy (argocd-server-netpol-patch.yaml) chỉ cho
+# Envoy vào. https://argo-cd.readthedocs.io/en/release-3.6/operator-manual/ingress/
+# Giá trị đọc qua biến môi trường lúc pod khởi động: đổi ConfigMap này phải
+# `kubectl -n argocd rollout restart deploy argocd-server` (bootstrap/README.md).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cmd-params-cm
+data:
+  server.insecure: "true"

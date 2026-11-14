@@ -1,0 +1,22 @@
+# Argo CD qua Gateway edge: https://argocd.lab.internal (G0-06). Route của thành phần hạ tầng thuộc platform, nằm ở
+# app edge (wave 5) thay vì bootstrap/argocd: lệnh bootstrap 1 chạy khi CRD HTTPRoute (wave 2) chưa có.
+# - Cổng 80 của Service argocd-server (→ 8080, HTTP thường nhờ server.insecure). Một route phục vụ cả UI lẫn CLI:
+#   CLI dùng `--grpc-web` (gRPC bọc trong HTTP/1.1); gRPC thuần cần thêm GRPCRoute với appProtocol h2c, chưa cần.
+# - Namespace argocd mang nhãn edge.lab.internal/routes (bootstrap/argocd/namespace.yaml).
+# https://argo-cd.readthedocs.io/en/release-3.6/operator-manual/ingress/
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: argocd
+  namespace: argocd
+spec:
+  parentRefs:
+    - name: edge
+      namespace: edge
+      sectionName: https
+  hostnames:
+    - argocd.lab.internal
+  rules:
+    - backendRefs:
+        - name: argocd-server
+          port: 80

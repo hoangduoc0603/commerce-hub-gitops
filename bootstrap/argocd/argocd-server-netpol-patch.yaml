@@ -1,0 +1,25 @@
+# Thay NetworkPolicy của argocd-server trong install.yaml (mặc định `ingress: [{}]`, tức mọi nguồn) bằng: chỉ pod Envoy
+# của Gateway edge vào cổng 8080. Phải SỬA policy có sẵn: NetworkPolicy là hợp các quy tắc cho phép, thêm một policy
+# hẹp hơn bên cạnh không chặn được gì.
+# - Nhãn pod Envoy do Envoy Gateway đặt (docs/standards/cluster-entry.md mục "HTTPRoute trong chart app").
+# - `kubectl port-forward` vẫn dùng được: kubelet nối vào cổng trong network namespace của pod, không đi qua policy.
+# - Cổng metrics 8083 chưa mở; G0-13 (Prometheus) thêm nguồn khi cần scrape.
+# https://kubernetes.io/docs/concepts/services-networking/network-policies/
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: argocd-server-network-policy
+spec:
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: envoy-gateway-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: envoy
+              app.kubernetes.io/component: proxy
+              app.kubernetes.io/managed-by: envoy-gateway
+      ports:
+        - protocol: TCP
+          port: 8080

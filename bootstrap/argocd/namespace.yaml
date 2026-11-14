@@ -15,3 +15,6 @@ metadata:
     # https://kubernetes.io/docs/concepts/security/pod-security-admission/
     pod-security.kubernetes.io/enforce: restricted
     pod-security.kubernetes.io/enforce-version: v1.37
+    # Cho phép gắn HTTPRoute vào listener https của Gateway edge (route argocd.lab.internal ở infra/edge/, G0-06).
+    # Chỉ platform gắn nhãn này (docs/standards/cluster-entry.md).
+    edge.lab.internal/routes: "true"

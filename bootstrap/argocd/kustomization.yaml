@@ -34,5 +34,8 @@ patches:
           argocd.argoproj.io/sync-options: Prune=false
   # Resource theo ngân sách ADR-0004
   - path: resources-patch.yaml
-  # Cấu hình argocd-cm (health check Lua cho Application)
+  # Cấu hình argocd-cm (url công khai, health check Lua cho Application)
   - path: argocd-cm-patch.yaml
+  # argocd-server phục vụ HTTP sau Gateway edge (server.insecure), chỉ nhận traffic từ Envoy (G0-06)
+  - path: argocd-cmd-params-cm-patch.yaml
+  - path: argocd-server-netpol-patch.yaml
