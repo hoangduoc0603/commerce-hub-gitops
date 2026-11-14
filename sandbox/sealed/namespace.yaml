@@ -1,0 +1,8 @@
+# Sandbox của G0-04: thử SealedSecret đầu-cuối. Gỡ ở bước 9 của ticket.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sandbox
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.37
