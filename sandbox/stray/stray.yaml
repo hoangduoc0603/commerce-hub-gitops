@@ -30,7 +30,7 @@ metadata:
   namespace: stray
 spec:
   parentRefs:
-    - name: edge-typo
+    - name: edge
       namespace: edge
       sectionName: http
   hostnames:
