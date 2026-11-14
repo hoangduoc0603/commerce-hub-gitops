@@ -1,0 +1,98 @@
+# Envoy Gateway v1.10.0: controller hiện thực Gateway API (ADR-0013). Pod Envoy do controller tự tạo khi có Gateway
+# (cấu hình ở EnvoyProxy trong infra/edge/, app edge).
+# Ticket G0-05. Chuẩn: docs/standards/cluster-entry.md mục "Gateway API CRD và Envoy Gateway".
+# Docs: https://gateway.envoyproxy.io/docs/install/install-argocd/, https://gateway.envoyproxy.io/docs/install/gateway-helm-api/
+#
+# - Wave 4: sau CRD Gateway API (2) và cert-manager (3, G0-06); Envoy Gateway v1.10 cần CRD v1.6 có trước.
+# - ServerSideApply=true theo docs cài bằng Argo CD (CRD lớn vượt giới hạn annotation của client-side apply).
+# - Không CreateNamespace: namespace là source thứ ba, do platform tạo (infra/envoy-gateway/).
+# - Chart OCI trên Docker Hub, repoURL không có tiền tố oci:// (Argo CD coi repoURL không có scheme là Helm OCI).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: envoy-gateway
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  sources:
+    # CRD riêng của Envoy Gateway (EnvoyProxy, ClientTrafficPolicy, BackendTrafficPolicy…). BẪY: gateway-helm với
+    # crds.enabled=false tắt cả nhóm CRD này chứ không chỉ CRD Gateway API (subchart `crds` gộp cả hai), nên phải
+    # cài từ chart gateway-crds-helm, chỉ bật phần envoyGateway. CRD Gateway API đã có ở app gateway-api-crds.
+    # Chart này để CRD trong templates/ nên skipCrds không liên quan.
+    # Digest gói chart: sha256 475c39aad3a05e3974a29fb80cfefe882b743e45e2ec0f751790ff0cb83bfa5d
+    - repoURL: docker.io/envoyproxy
+      chart: gateway-crds-helm
+      targetRevision: v1.10.0
+      helm:
+        releaseName: eg-crds
+        valuesObject:
+          crds:
+            gatewayAPI:
+              enabled: false
+            envoyGateway:
+              enabled: true
+    # Controller. NÂNG CẤP: đổi cùng commit targetRevision của HAI chart trên, digest image controller bên dưới; đọc
+    # bảng matrix (bản CRD Gateway API, dải Kubernetes) và nâng app gateway-api-crds trước nếu matrix đòi.
+    # Digest gói chart: sha256 dcb82a14c04b426615a71d97222c7edf9f5ff58b800d241e71ac5784ae6dc7b7
+    - repoURL: docker.io/envoyproxy
+      chart: gateway-helm
+      targetRevision: v1.10.0
+      helm:
+        releaseName: eg
+        valuesObject:
+          crds:
+            enabled: false
+          global:
+            images:
+              # Image index đa kiến trúc ghim digest (docs/standards/helm-chart.md). Shutdown-manager trong pod Envoy
+              # dùng chung image này (chart ghi vào cấu hình EnvoyGateway). Image Envoy đã được upstream ghim digest
+              # trong mã (DefaultEnvoyProxyImage, api/v1alpha1/shared_types.go@v1.10.0: envoy distroless-v1.40.2).
+              envoyGateway:
+                image: docker.io/envoyproxy/gateway:v1.10.0@sha256:c2243d43518bed91d3ed8c2db849a4b7a14ac9b96eb019f2ab104bb1ca8572b1
+              # Rate limit chưa bật; ghim theo DefaultRateLimitImage của v1.10.0 để cấu hình không còn tag trôi.
+              ratelimit:
+                image: docker.io/envoyproxy/ratelimit:5ae0682e@sha256:b95206e32b1a5f824fb06062fbb85bbdfb7f5de54135e92afe8462f22c979681
+          deployment:
+            envoyGateway:
+              # ADR-0004: 256 Mi, request = limit (mặc định chart: request 256Mi, limit 1024Mi). Không CPU limit.
+              # Benchmark v1.10.0 đo khoảng 134 MiB ở 10 HTTPRoute.
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  memory: 256Mi
+              # Go không biết trần container; ~90% limit như các thành phần Go của Argo CD (G0-03).
+              extraEnv:
+                - name: GOMEMLIMIT
+                  value: 230MiB
+          certgen:
+            job:
+              # Job certgen là Helm hook pre-install/pre-upgrade, Argo CD chạy nó như PreSync ở MỌI lần sync (idempotent:
+              # không ghi đè chứng chỉ đã có). Chart đặt ttlSecondsAfterFinished 30; bỏ đi theo gitops-argocd.md
+              # (Kubernetes có thể xóa Job trước khi Argo CD đọc kết quả), giữ Job gần nhất để đọc log.
+              ttlSecondsAfterFinished: null
+              annotations:
+                argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    - repoURL: https://github.com/hoangduoc0603/commerce-hub-gitops.git
+      targetRevision: main
+      path: infra/envoy-gateway
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: envoy-gateway-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

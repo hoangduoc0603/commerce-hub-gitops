@@ -1,0 +1,15 @@
+# Namespace của controller Envoy Gateway. Pod Envoy (data plane) của mọi Gateway cũng chạy ở đây (deployment mode
+# mặc định: proxy nằm trong namespace của controller). Do platform tạo, app không dùng CreateNamespace.
+# https://gateway.envoyproxy.io/docs/tasks/operations/deployment-mode/
+# - Pod Security restricted, ghim enforce-version theo bản Kubernetes (như namespace argocd, gitops-argocd.md).
+# - Prune=false: commit lỡ làm file này biến mất không xóa namespace (xóa namespace là xóa pod Envoy, mọi hostname
+#   của lab mất). Xóa hẳn app envoy-gateway (có finalizer) vẫn dọn namespace.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: envoy-gateway-system
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.37
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false

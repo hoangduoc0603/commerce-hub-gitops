@@ -50,6 +50,8 @@ spec:
     - https://github.com/hoangduoc0603/commerce-hub-gitops.git
     # Sealed Secrets (G0-04)
     - https://bitnami.github.io/sealed-secrets
+    # Envoy Gateway: chart OCI gateway-helm, gateway-crds-helm (G0-05)
+    - docker.io/envoyproxy
   destinations:
     - server: https://kubernetes.default.svc
       namespace: '*'
