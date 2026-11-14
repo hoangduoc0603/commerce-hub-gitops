@@ -1,0 +1,41 @@
+# Namespace chứa Gateway edge (và từ G0-06: Secret chứng chỉ wildcard, route chuyển HTTP sang HTTPS).
+# Không có pod nào chạy ở đây: pod Envoy nằm ở envoy-gateway-system. Pod Security restricted cho đồng bộ.
+# Prune=false: commit lỡ không xóa namespace (xóa là mất Gateway, mọi hostname của lab).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: edge
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.37
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
+---
+# Vai trò "cluster operator" của Gateway API: mở cổng, chọn hostname, quyết định namespace nào được gắn route.
+# Tên edge để không nhầm với service gateway (Spring Cloud Gateway) của dự án.
+# https://gateway-api.sigs.k8s.io/guides/user-guides/multiple-ns/
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: edge
+  namespace: edge
+spec:
+  gatewayClassName: envoy
+  listeners:
+    # G0-05 chỉ có HTTP. G0-06 đổi listener này thành `from: Same` (chỉ nhận route chuyển sang HTTPS trong namespace
+    # edge) và thêm listener https (443, TLS Terminate, chứng chỉ wildcard) mang selector bên dưới.
+    - name: http
+      protocol: HTTP
+      port: 80
+      # Wildcard chỉ phủ đúng một nhãn bên trái: a.lab.internal khớp, a.b.lab.internal không.
+      hostname: "*.lab.internal"
+      allowedRoutes:
+        kinds:
+          - kind: HTTPRoute
+        # Mặc định của `from` là Same. Selector: chỉ namespace mang nhãn này (do platform gắn khi tạo namespace) gắn
+        # được route; namespace khác bị từ chối với reason NotAllowedByListeners. Không bao giờ dùng `from: All`.
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              edge.lab.internal/routes: "true"
