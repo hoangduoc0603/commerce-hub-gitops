@@ -9,6 +9,9 @@
 # sinh (resourceVersion, uid, creationTimestamp, managedFields) cho file gọn và không mang metadata của cụm cũ.
 # Không bắt buộc: G0-04 bước 8 thử `kubectl apply --dry-run=server` với Secret còn resourceVersion, uid
 # vẫn tạo được. Giữ nhãn sealedsecrets.bitnami.com/sealed-secrets-key: controller tìm khóa theo nhãn này.
+# Bỏ annotation kubectl.kubernetes.io/last-applied-configuration: khóa từng được khôi phục bằng `kubectl apply`
+# (client-side) thì annotation này chứa NGUYÊN Secret, tức một bản private key thứ hai trong file (G0-04: file
+# sao lưu từ 6 956 thành 13 959 byte). Khôi phục lại bằng apply thì kubectl tự gắn lại, không mất gì.
 # Không lấy Secret `sealed-secrets-key` kiểu cũ: chỉ có nếu từng cài bản < 0.9 (cụm này cài 0.41.2).
 #
 # Dùng: scripts/backup-sealing-key.sh [thư-mục-đích]   (mặc định ~/.commerce-hub/sealing-keys)
@@ -47,7 +50,9 @@ trap '[[ $ok -eq 1 ]] || rm -f "$out"' EXIT
 
 kubectl get secret --request-timeout="$TIMEOUT" -n "$NS" -l "$LABEL" -o yaml \
   | yq 'del(.metadata) | del(.items[].metadata.resourceVersion, .items[].metadata.uid,
-        .items[].metadata.creationTimestamp, .items[].metadata.managedFields)' >"$out"
+        .items[].metadata.creationTimestamp, .items[].metadata.managedFields)
+        | del(.items[].metadata.annotations."kubectl.kubernetes.io/last-applied-configuration")
+        | del(.items[].metadata.annotations | select(length == 0))' >"$out"
 
 n=$(yq '.items | length' "$out")
 if [[ "$n" -lt 1 ]]; then
