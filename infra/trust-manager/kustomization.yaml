@@ -1,0 +1,28 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Chỉ CRD. Namespace cert-manager do app cert-manager tạo (infra/cert-manager/namespace.yaml); trust-manager cài chung
+# namespace đó vì trust namespace (nơi đọc ConfigMap/Secret nguồn) mặc định là cert-manager.
+resources:
+  # CRD Bundle (trust.cert-manager.io/v1alpha1, cluster-scoped) render từ chart v0.26.0:
+  #   helm template trust-manager oci://quay.io/jetstack/charts/trust-manager --version v0.26.0 -n cert-manager \
+  #     --show-only templates/crd-trust.cert-manager.io_bundles.yaml
+  # (bỏ hai dòng đầu `---`/`# Source`; file sha256 6a1c0a0e…b722e03, 2026-11-15). Chart v0.26.0 chưa có ClusterBundle
+  # (trust-manager.io/v1alpha2, thông báo 2025-09-05); khi bản mới đưa nó thành mặc định thì phải viết lại Bundle ở app
+  # lab-ca. https://cert-manager.io/announcements/2025/09/05/trust-manager-clusterbundle/
+  # Vendor thay vì crds.enabled=true để gắn được annotation bảo vệ bên dưới (như cert-manager, envoy-gateway).
+  # NÂNG CẤP: render lại bằng lệnh trên với version mới, xem diff, sửa sha256, cùng commit với targetRevision chart.
+  - upstream/trust-manager.crds.yaml
+patches:
+  # Xóa CRD là xóa mọi Bundle; trust-manager khi đó xóa luôn ConfigMap đích ở mọi namespace, pod JVM khởi động lại sau
+  # đó không có truststore (JDK dùng "an empty keystore", mọi TLS hỏng). Prune=false chặn commit lỡ; Delete=false chặn
+  # cascade khi xóa app. https://argo-cd.readthedocs.io/en/release-3.6/user-guide/sync-options/#no-prune-resources
+  - target:
+      group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+    patch: |-
+      apiVersion: apiextensions.k8s.io/v1
+      kind: CustomResourceDefinition
+      metadata:
+        name: any
+        annotations:
+          argocd.argoproj.io/sync-options: Prune=false,Delete=false

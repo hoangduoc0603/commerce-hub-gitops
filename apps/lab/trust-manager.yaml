@@ -1,0 +1,85 @@
+# trust-manager v0.26.0: gom root CA của lab (cộng gói CA công khai) thành ConfigMap PEM và truststore PKCS12, đồng bộ
+# vào các namespace có nhãn. Pod JVM nạp qua javax.net.ssl.trustStore, pod Node qua NODE_EXTRA_CA_CERTS (chart app,
+# G0-22). Bundle nằm ở app lab-ca (infra/lab-ca/), app này chỉ cài controller và CRD.
+# Ticket G0-07. Chuẩn: docs/standards/cluster-entry.md mục "Phân phối trust", ADR-0014.
+# Docs: https://cert-manager.io/docs/trust/trust-manager/installation/, https://cert-manager.io/docs/trust/trust-manager/
+#
+# - Wave 4: sau cert-manager (3). Chart xin chứng chỉ webhook bằng Issuer selfSigned + Certificate của cert-manager
+#   (app.webhook.tls.helmCert.enabled=false là mặc định; docs khuyên không dùng chứng chỉ Helm sinh, hạn 10 năm), nên
+#   CRD và webhook của cert-manager phải có trước. Trước lab-ca (5), nơi tạo Bundle.
+# - Không dùng v0.25.0: gói CA mặc định của bản đó còn hai root eMudhra bị lộ (release notes v0.26.0).
+# - Chart OCI trên quay.io như cert-manager (repoURL không tiền tố oci://).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: trust-manager
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  sources:
+    # NÂNG CẤP: đổi cùng commit targetRevision, hai digest image dưới đây và CRD vendor trong infra/trust-manager/upstream/;
+    # đọc release notes, nhất là thay đổi của gói CA mặc định (root bị thêm hoặc gỡ) và lộ trình Bundle → ClusterBundle.
+    # Digest gói chart (OCI manifest): sha256 946c6e52f0a6e251c81102de83ffc6e0b11446193bed8670d4cdbfd3cecbc2e8
+    - repoURL: quay.io/jetstack/charts
+      chart: trust-manager
+      targetRevision: v0.26.0
+      helm:
+        releaseName: trust-manager
+        valuesObject:
+          crds:
+            enabled: false
+          # Image index đa kiến trúc ghim digest (docs/standards/helm-chart.md); digest đè tag.
+          image:
+            digest: sha256:783afe31d39f122a811b96ac3aedab9f358488088df21622ae5b057b4a38b5c2
+          # Init container chép gói CA công khai (ca-certificates của Debian 13, tag 20250419-deb13u1.1) vào emptyDir;
+          # nó bật nguồn useDefaultCAs của Bundle. Đổi gói CA = đổi digest này.
+          defaultPackageImage:
+            digest: sha256:477cc69ef6a026b90a6d67d4ac7114735c5f66edf1cc97e68b9da599adf231af
+          # Init container chạy trước và xong rồi mới tới container chính, nên request hiệu dụng của pod là max(init,
+          # tổng container). Đặt bằng container chính: không làm tăng request của pod mà vẫn có trần.
+          defaultPackage:
+            resources:
+              requests:
+                cpu: 10m
+                memory: 64Mi
+              limits:
+                memory: 64Mi
+          # ADR-0004: 64 Mi, request = limit, không CPU limit. Chart để trống (pod BestEffort).
+          # Lệch so với cert-manager: chart không có extraEnv/env nên không đặt được GOMEMLIMIT. Chấp nhận: controller
+          # chỉ giữ cache ConfigMap/Namespace/Bundle; số RAM đo ở G0-07 bước 1.
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 64Mi
+          app:
+            # Nơi trust-manager đọc nguồn configMap/secret của Bundle. Mặc định đã là cert-manager; ghi tường minh vì
+            # ConfigMap root lab (infra/lab-ca/) phải nằm đúng namespace này.
+            trust:
+              namespace: cert-manager
+          # Giữ mặc định tắt: bật Secret target là cấp cho trust-manager quyền đọc mọi Secret trong phạm vi. Trust
+          # bundle là dữ liệu công khai, ConfigMap là đủ.
+          secretTargets:
+            enabled: false
+    # CRD vendor (Prune=false,Delete=false).
+    - repoURL: https://github.com/hoangduoc0603/commerce-hub-gitops.git
+      targetRevision: main
+      path: infra/trust-manager
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cert-manager
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
