@@ -17,6 +17,16 @@
 # - applied=false khi generation hiện tại chưa từng apply thành công là Progressing, không Degraded: lần đầu migrator có
 #   thể fail vì role trong inRoles chưa có, operator thử lại và tự khỏi; Degraded sẽ làm hỏng chính lần sync đó.
 #   Giá phải trả: role lỗi ngay từ đầu (ví dụ inRoles sai tên) kẹt ở Progressing kèm message lỗi, không chuyển đỏ.
+#
+# Health check cho postgresql.cnpg.io/Pooler (G0-08): Argo CD v3.6.1 không có sẵn. Status của Pooler (CNPG v1.30.1,
+# internal/controller/pooler_status.go, api/v1/pooler_types.go) chỉ có phase/phaseReason/error/instances, không có
+# observedGeneration hay số pod Ready:
+# - phase active được đặt ngay khi resolve được image, không chờ pod Ready; status.instances là Deployment
+#   .status.replicas (pod đã tạo, chưa chắc Ready). App health lại không kế thừa health resource con (docs Resource
+#   health, "not inherited from child resources"), nên Deployment PgBouncer chưa Ready mà app vẫn có thể xanh.
+#   Kiểm pod Ready bằng `kubectl rollout status` và alert ở G0-13, không dựa vào màu của app.
+# - failed (lỗi cấu hình) hoặc status.error (lỗi admission) → Degraded; inactive (thiếu Cluster, Secret, cert; tự khỏi
+#   khi tiền đề có) → Progressing; paused (spec.pgbouncer.paused) → Suspended.
 # Chuẩn: docs/standards/postgres-cnpg.md, mục "Argo CD".
 apiVersion: v1
 kind: ConfigMap
@@ -60,5 +70,48 @@ data:
     end
     if obj.status.message ~= nil and obj.status.message ~= "" then
       hs.message = obj.status.message
+    end
+    return hs
+  resource.customizations.health.postgresql.cnpg.io_Pooler: |
+    local hs = {
+      status = "Progressing",
+      message = "Waiting for CloudNativePG to reconcile Pooler"
+    }
+    if obj.status == nil then
+      return hs
+    end
+    if obj.status.error ~= nil and obj.status.error ~= "" then
+      hs.status = "Degraded"
+      hs.message = obj.status.error
+      return hs
+    end
+    local reason = obj.status.phaseReason or ""
+    if obj.status.phase == "failed" then
+      hs.status = "Degraded"
+      hs.message = reason
+      return hs
+    end
+    if obj.status.phase == "paused" then
+      hs.status = "Suspended"
+      hs.message = reason
+      return hs
+    end
+    if obj.status.phase == "inactive" then
+      hs.message = reason
+      return hs
+    end
+    if obj.status.phase == "active" then
+      local want = 1
+      if obj.spec ~= nil and obj.spec.instances ~= nil then
+        want = obj.spec.instances
+      end
+      local have = obj.status.instances or 0
+      if have < want then
+        hs.message = "PgBouncer pods created: " .. have .. "/" .. want
+        return hs
+      end
+      hs.status = "Healthy"
+      hs.message = "PgBouncer pods created: " .. have .. "/" .. want .. " (readiness not tracked)"
+      return hs
     end
     return hs
