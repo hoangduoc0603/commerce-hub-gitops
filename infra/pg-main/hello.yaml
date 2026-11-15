@@ -82,8 +82,9 @@ spec:
   name: hello_app
   comment: "hello: pod runtime qua Pooler, chỉ DML và EXECUTE hàm tra cứu"
   login: true
-  # Bằng default_pool_size (10) của Pooler 1 pod: PgBouncer mở tối đa 10 kết nối server cho cặp hello_app/hello. Tăng
-  # Pooler lên 2 pod thì sửa thành 20 cùng commit.
+  # default_pool_size (8) của Pooler 1 pod cộng 2 chỗ cho kết nối thẳng (người vận hành, debug). Pool bằng đúng giới
+  # hạn thì một kết nối thẳng làm PgBouncer trả FATAL cho client (G0-08 bước 8). Tăng Pooler lên 2 pod thì sửa thành
+  # 2 × 8 + 2 = 18 cùng commit.
   connectionLimit: 10
   passwordSecret:
     name: pg-main-hello-app

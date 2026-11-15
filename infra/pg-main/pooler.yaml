@@ -21,7 +21,7 @@ spec:
     name: pg-main
   type: rw
   # 1 pod (ADR-0004; tra cứu đề xuất 2). Pod PgBouncer khởi động lại là mọi kết nối runtime rớt cho tới khi pod mới
-  # Ready. Lên 2 thì sửa connectionLimit của mọi <svc>_app thành 2 × default_pool_size cùng commit.
+  # Ready. Lên 2 thì sửa connectionLimit của mọi <svc>_app thành 2 × default_pool_size + 2 cùng commit.
   instances: 1
   pgbouncer:
     # Image mặc định của operator 1.30.1 là ghcr.io/cloudnative-pg/pgbouncer:1.25.2 (pkg/versions/versions.go), tag
@@ -33,10 +33,16 @@ spec:
     poolMode: transaction
     # Operator truyền thẳng cho PgBouncer, không kiểm. Chỉ đặt chỗ lệch mặc định có lý do:
     parameters:
-      # PgBouncer mặc định 20 và operator không đặt (pkg/management/pgbouncer/config/config.go). 10 bằng
-      # connectionLimit của mọi <svc>_app: để 20 thì PgBouncer mở kết nối thứ 11 bị PostgreSQL từ chối "too many
-      # connections for role" và client nhận lỗi thay vì xếp hàng trong pool. https://www.pgbouncer.org/config.html
-      default_pool_size: "10"
+      # PgBouncer mặc định 20 và operator không đặt (pkg/management/pgbouncer/config/config.go). Phải nhỏ hơn
+      # connectionLimit (10) của mọi <svc>_app: giới hạn đó tính mọi kết nối của role, kể cả kết nối thẳng (người vận
+      # hành dùng DataGrip, pod đo). Pool chạm giới hạn thì PgBouncer nhận "too many connections for role", cache lỗi
+      # trong server_login_retry và trả FATAL cho client thay vì xếp hàng (gặp ở G0-08 bước 8 khi pool = 10). 8 chừa
+      # 2 chỗ cho kết nối thẳng, ngân sách kết nối của cụm không đổi. https://www.pgbouncer.org/config.html
+      default_pool_size: "8"
+      # Mặc định 15 s: login vào server lỗi một lần (switchover, restart) thì PgBouncer trả lỗi đã cache cho mọi client
+      # mới trong 15 s dù PostgreSQL đã sống lại. G0-08 bước 8 đo được gián đoạn qua Pooler khoảng 15 s so với 7,5 s nối
+      # thẳng. 2 s: thử lại sớm, giá là vài lần login thất bại thêm khi server chết thật.
+      server_login_retry: "2"
       # Operator mặc định prefer: client nói chuyện plaintext với Pooler vẫn được. require để chặn plaintext ở chặng
       # pod → Pooler như hostssl đã chặn ở chặng Pooler → PostgreSQL (pgjdbc mặc định sslmode=prefer nên tự dùng TLS).
       client_tls_sslmode: require
