@@ -1,0 +1,59 @@
+# Pooler PgBouncer cho pg-main (G0-08 bước 6). Chuẩn: docs/standards/postgres-cnpg.md mục "Pooler". ADR-0003, ADR-0004.
+# Docs: https://cloudnative-pg.io/docs/1.30/connection_pooling/
+#
+# Một Pooler phục vụ mọi database của pg-main: pod runtime của service nối `pg-main-pooler-rw.postgres.svc:5432`
+# bằng role <svc>_app. Job Flyway (<svc>_migrator) và Keycloak nối thẳng `pg-main-rw`: advisory lock kiểu session và
+# `SET` không dùng được ở chế độ transaction (docs/standards/db-migration.md).
+#
+# Xác thực dùng cơ chế có sẵn: PgBouncer chạy auth_query bằng role cnpg_pooler_pgbouncer (client cert, luật pg_hba cố
+# định của operator) để lấy SCRAM verifier, rồi nối tới PostgreSQL bằng chính role của client qua TLS verify-ca. Vì
+# vậy pg_hba trên Cluster vẫn quyết định role nào vào database nào, kể cả khi đi qua Pooler.
+apiVersion: postgresql.cnpg.io/v1
+kind: Pooler
+metadata:
+  name: pg-main-pooler-rw
+  annotations:
+    # Sau Cluster (wave 0). Health ở argocd-cm (Argo CD không có sẵn check cho Pooler); check chỉ thấy pod đã tạo,
+    # không thấy pod Ready, xem comment ở bootstrap/argocd/argocd-cm-patch.yaml.
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  cluster:
+    name: pg-main
+  type: rw
+  # 1 pod (ADR-0004; tra cứu đề xuất 2). Pod PgBouncer khởi động lại là mọi kết nối runtime rớt cho tới khi pod mới
+  # Ready. Lên 2 thì sửa connectionLimit của mọi <svc>_app thành 2 × default_pool_size cùng commit.
+  instances: 1
+  pgbouncer:
+    # Image mặc định của operator 1.30.1 là ghcr.io/cloudnative-pg/pgbouncer:1.25.2 (pkg/versions/versions.go), tag
+    # trượt. Ghim cùng phiên bản bằng tag có timestamp (bất biến) và digest image index, như imageName của Cluster.
+    image: ghcr.io/cloudnative-pg/pgbouncer:1.25.2-202609221033-trixie@sha256:b15c428057d1ffbc19fb70496911a5f1a47066dcc1315bf794f4e85ade29e2e5
+    # transaction: kết nối server trả về pool sau mỗi giao dịch, nên 10 kết nối server phục vụ được nhiều pod
+    # runtime. Đổi lại không dùng được trạng thái gắn với session (SET, advisory lock session, LISTEN, prepared
+    # statement cấp SQL); RLS dùng `SET LOCAL app.workspace_id` trong giao dịch (ADR-0010) nên vẫn đúng.
+    poolMode: transaction
+    # Operator truyền thẳng cho PgBouncer, không kiểm. Chỉ đặt chỗ lệch mặc định có lý do:
+    parameters:
+      # PgBouncer mặc định 20 và operator không đặt (pkg/management/pgbouncer/config/config.go). 10 bằng
+      # connectionLimit của mọi <svc>_app: để 20 thì PgBouncer mở kết nối thứ 11 bị PostgreSQL từ chối "too many
+      # connections for role" và client nhận lỗi thay vì xếp hàng trong pool. https://www.pgbouncer.org/config.html
+      default_pool_size: "10"
+      # Operator mặc định prefer: client nói chuyện plaintext với Pooler vẫn được. require để chặn plaintext ở chặng
+      # pod → Pooler như hostssl đã chặn ở chặng Pooler → PostgreSQL (pgjdbc mặc định sslmode=prefer nên tự dùng TLS).
+      client_tls_sslmode: require
+  # Thiếu `containers` thì API server từ chối template; container phải tên đúng `pgbouncer`.
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: pgbouncer
+    spec:
+      containers:
+        - name: pgbouncer
+          # Memory requests = limits theo ngân sách 64 Mi (ticket 04 của map). CPU chỉ request, không limit: PgBouncer
+          # nằm trên đường mọi query, CFS throttling cộng thẳng vào latency (cùng lý do với pod operator); QoS
+          # Burstable là cố ý.
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 64Mi
