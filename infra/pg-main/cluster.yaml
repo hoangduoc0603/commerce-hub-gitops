@@ -35,6 +35,20 @@ spec:
     parameters:
       # Khoảng 25% memory của pod (docs Resource management). Các tham số khác giữ mặc định cho tới khi có số đo.
       shared_buffers: 256MB
+    # Ai được nối vào database nào (G0-08 quyết định A; chuẩn postgres-cnpg.md mục "Phân quyền kết nối").
+    # Operator ghép file theo thứ tự: luật cố định (local peer cho metrics exporter và postgres, cert cho
+    # streaming_replica và cnpg_pooler_pgbouncer) → các dòng dưới đây → dòng mặc định `host all all all scram-sha-256`.
+    # Dòng khớp đầu tiên thắng, nên thiếu `reject` cuối danh sách thì role nào có mật khẩu cũng vào được database nào.
+    # - hostssl: kết nối không TLS không khớp dòng cho phép, rơi xuống reject. Pooler và JDBC dùng TLS sẵn.
+    # - Chỉ liệt kê role LOGIN; role NOLOGIN (_owner, _lookup) không cần dòng.
+    # - Địa chỉ `all`: IP pod (Pooler, Job Flyway) thay đổi; giới hạn nguồn là việc của NetworkPolicy (chưa làm).
+    # - Database `app` của bootstrap và `postgres` không có dòng nào: chỉ vào được qua local peer trong pod.
+    # Thêm service: thêm một dòng hostssl cùng commit với file CR của service (runbook "thêm service"). Đổi pg_hba
+    # chỉ reload, không restart pod.
+    # Docs: https://cloudnative-pg.io/docs/1.30/postgresql_conf/, https://www.postgresql.org/docs/18/auth-pg-hba-conf.html
+    pg_hba:
+      - hostssl hello hello_migrator,hello_app all scram-sha-256
+      - host all all all reject
 
   # requests = limits cho cả CPU và memory: QoS Guaranteed (docs Resource management). Memory theo ngân sách 1 024 Mi
   # (ticket 04 của map); CPU không phải ràng buộc của lab (node 4–6 vCPU, request hiện dưới 1 core mỗi node).
