@@ -4,6 +4,8 @@
 #   securityContext mặc định của pod PostgreSQL (non-root, seccomp RuntimeDefault, drop ALL) phải đạt mức này. Đã kiểm khi
 #   dựng (G0-08 bước 3).
 # - Prune=false: commit lỡ làm file này biến mất không xóa namespace (xóa namespace là xóa Cluster và PVC bên trong).
+# - Delete=false: app pg-main có finalizer cascade; thiếu dòng này thì xóa app là Argo CD xóa namespace, kéo theo Cluster
+#   và PVC dù Cluster mang Delete=false (review G0-08; gitops-argocd.md mục "Cấu trúc Application").
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -12,4 +14,4 @@ metadata:
     pod-security.kubernetes.io/enforce: restricted
     pod-security.kubernetes.io/enforce-version: v1.37
   annotations:
-    argocd.argoproj.io/sync-options: Prune=false
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false

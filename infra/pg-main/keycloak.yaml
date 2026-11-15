@@ -24,8 +24,8 @@ spec:
   name: keycloak
   comment: "keycloak: owner database keycloak, Keycloak tự migrate và chạy runtime (nối thẳng pg-main-rw)"
   login: true
-  # Bằng db-pool-max-size 20 của 1 pod Keycloak (keycloak.md hạ từ mặc định 100; đặt ở ticket 10). Ngân sách: 97
-  # dùng được, 6 database kiểu service × 12 = 72, Keycloak 20, còn 5. Lên 2 pod Keycloak thì phải xét lại ngân sách.
+  # Bằng db-pool-max-size 20 của 1 pod Keycloak (keycloak.md hạ từ mặc định 100; đặt ở ticket 10). Lên 2 pod Keycloak
+  # thì xét lại ngân sách (docs/runbooks/pg-main-them-service.md mục 1).
   connectionLimit: 20
   passwordSecret:
     name: pg-main-keycloak

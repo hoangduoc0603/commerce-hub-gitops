@@ -1,6 +1,6 @@
 # pg-main: cluster PostgreSQL 18 dùng chung cho mọi service có DB, Keycloak và marketplace-sim (ADR-0003), 1 instance ở lab
-# (ADR-0004). Mã nguồn ở infra/pg-main/: namespace postgres, Cluster; Database, DatabaseRole, Secret mật khẩu và Pooler
-# thêm ở các bước sau của G0-08.
+# (ADR-0004). Mã nguồn ở infra/pg-main/: namespace postgres, Cluster (pg_hba), Pooler; mỗi service một file CR
+# (hello.yaml, keycloak.yaml) và SealedSecret mật khẩu. Thêm service: docs/runbooks/pg-main-them-service.md.
 # Ticket G0-08. Chuẩn: docs/standards/postgres-cnpg.md.
 #
 # - Wave 7: sau operator CloudNativePG (6, CRD và webhook phải có trước khi apply Cluster).

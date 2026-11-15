@@ -23,8 +23,8 @@ spec:
   # Ghi tường minh dù là mặc định, để đọc file là thấy chính sách:
   # - Superuser tắt: operator xóa Secret superuser và đặt mật khẩu postgres thành NULL; postgres chỉ vào được bằng
   #   `local all all peer` trong pod (kubectl cnpg psql).
-  # - PDB bật: với 1 instance, operator chặn drain node chứa pod (docs Kubernetes upgrade and maintenance). Cách bảo trì
-  #   node chọn ở G0-08 bước 8.
+  # - PDB bật: với 1 instance, operator chặn drain node chứa pod (docs Kubernetes upgrade and maintenance). Bảo trì node:
+  #   tạm lên 2 instance để operator switchover rồi về 1, giữ PDB (docs/runbooks/pg-main-bao-tri-node.md, G0-08 bước 8).
   enableSuperuserAccess: false
   enablePDB: true
 

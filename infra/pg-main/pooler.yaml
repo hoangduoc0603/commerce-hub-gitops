@@ -13,7 +13,8 @@ kind: Pooler
 metadata:
   name: pg-main-pooler-rw
   annotations:
-    # Sau Cluster (wave 0). Health ở argocd-cm (Argo CD không có sẵn check cho Pooler); check chỉ thấy pod đã tạo,
+    # Wave 1: chỉ cần Cluster (wave 0), không phụ thuộc role hay database. Không đặt sau Database (3) như thứ tự trong
+    # chuẩn: role lỗi kẹt Progressing mãi (health Lua DatabaseRole), Pooler ở wave sau sẽ không được sync. Health ở argocd-cm (Argo CD không có sẵn check cho Pooler); check chỉ thấy pod đã tạo,
     # không thấy pod Ready, xem comment ở bootstrap/argocd/argocd-cm-patch.yaml.
     argocd.argoproj.io/sync-wave: "1"
 spec:
@@ -27,7 +28,7 @@ spec:
     # Image mặc định của operator 1.30.1 là ghcr.io/cloudnative-pg/pgbouncer:1.25.2 (pkg/versions/versions.go), tag
     # trượt. Ghim cùng phiên bản bằng tag có timestamp (bất biến) và digest image index, như imageName của Cluster.
     image: ghcr.io/cloudnative-pg/pgbouncer:1.25.2-202609221033-trixie@sha256:b15c428057d1ffbc19fb70496911a5f1a47066dcc1315bf794f4e85ade29e2e5
-    # transaction: kết nối server trả về pool sau mỗi giao dịch, nên 10 kết nối server phục vụ được nhiều pod
+    # transaction: kết nối server trả về pool sau mỗi giao dịch, nên 8 kết nối server (default_pool_size) phục vụ được nhiều pod
     # runtime. Đổi lại không dùng được trạng thái gắn với session (SET, advisory lock session, LISTEN, prepared
     # statement cấp SQL); RLS dùng `SET LOCAL app.workspace_id` trong giao dịch (ADR-0010) nên vẫn đúng.
     poolMode: transaction

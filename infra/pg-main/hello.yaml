@@ -12,10 +12,9 @@
 # Chung cho mọi role: superuser/createdb/createrole/replication để mặc định false; databaseRoleReclaimPolicy để mặc định
 # retain (xóa nhầm CR không DROP ROLE). Role do CR quản lý: không sửa bằng ALTER ROLE (DatabaseRole không phát hiện drift).
 #
-# connectionLimit (bắt buộc ghi rõ, bỏ trống là -1): max_connections mặc định 100, trừ 3 superuser_reserved còn 97. G1 có
-# tới 7 database (5 service, Keycloak, marketplace-sim). Mỗi service 10 (_app) + 2 (_migrator) = 12, 6 database kiểu này
-# = 72, còn chỗ cho Keycloak (bước 7) mà tổng giới hạn vẫn dưới 97: một service chiếm hết kết nối không làm service khác
-# hết chỗ (ADR-0003, noisy neighbour).
+# connectionLimit (bắt buộc ghi rõ, bỏ trống là -1): tổng giới hạn mọi role LOGIN phải dưới 97 (max_connections 100
+# trừ 3 reserved) để một service chiếm hết phần của nó không làm service khác hết chỗ (ADR-0003). Bảng ngân sách và
+# lệnh kiểm: docs/runbooks/pg-main-them-service.md mục 1.
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: DatabaseRole

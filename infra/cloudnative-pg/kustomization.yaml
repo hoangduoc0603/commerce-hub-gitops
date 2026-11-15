@@ -11,8 +11,8 @@ resources:
   # sửa sha256, cùng commit với targetRevision chart và digest image trong apps/lab/cloudnative-pg.yaml.
   - upstream/cnpg-1.30.1.crds.yaml
 patches:
-  # Xóa CRD clusters.postgresql.cnpg.io là xóa mọi Cluster, rồi GC xóa pod và object con theo ownerReference (PVC có
-  # ownerReference về Cluster hay không: kiểm ở G0-08 bước 3); mất pg-main là mất database của mọi service.
+  # Xóa CRD clusters.postgresql.cnpg.io là xóa mọi Cluster, rồi GC xóa pod và object con theo ownerReference (đã kiểm ở
+  # G0-08 bước 3: PVC có ownerReference controller về Cluster); mất pg-main là mất database của mọi service.
   # Tương tự Database, DatabaseRole (reclaim retain chỉ giữ object trong PostgreSQL khi CR bị xóa có kiểm soát), Backup.
   # Prune=false chặn commit lỡ; Delete=false chặn cascade khi xóa app.
   # https://argo-cd.readthedocs.io/en/release-3.6/user-guide/sync-options/#no-prune-resources
