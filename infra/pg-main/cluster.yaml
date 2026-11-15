@@ -12,7 +12,7 @@ metadata:
 spec:
   # 1 instance (ADR-0004). Tăng lên 2 bằng commit khi thí nghiệm failover hoặc khi bảo trì node (postgres-cnpg.md mục
   # Drain), xong thì revert.
-  instances: 1
+  instances: 2
 
   # PostgreSQL 18.7, image standard (dùng được với plugin Barman Cloud ở G0-09; system deprecated) trên Debian trixie.
   # Tag có timestamp là tag bất biến của lần build; digest là image index đa kiến trúc, đè tag.
