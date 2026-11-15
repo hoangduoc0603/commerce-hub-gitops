@@ -69,11 +69,19 @@ kubectl -n argocd get appproject default -o jsonpath='{.spec}'     # sourceRepos
 Người vận hành tự làm trong terminal của mình. Đừng dán mật khẩu vào chat hay vào log.
 
 ```bash
-kubectl -n argocd port-forward svc/argocd-server 8080:443   # để chạy ở một tab riêng
-argocd admin initial-password -n argocd                     # in mật khẩu admin ban đầu
-argocd login localhost:8080 --username admin                # nhận chứng chỉ tự ký khi được hỏi
+argocd admin initial-password -n argocd                                  # in mật khẩu admin ban đầu
+argocd login argocd.lab.internal --grpc-web --username admin             # qua Gateway edge, chứng chỉ của lab-ca
 ```
 
+- Argo CD mở qua `https://argocd.lab.internal` khi app `edge` (wave 5) đã `Healthy`. CLI phải có `--grpc-web`: route là `HTTPRoute` (HTTP/1.1), gRPC thuần không đi qua được (G0-06).
+- Trước khi `edge` sẵn sàng (vừa xong lệnh bootstrap 2), dùng port-forward. argocd-server chạy `server.insecure` nên nói HTTP thường, CLI cần `--plaintext`:
+
+  ```bash
+  kubectl -n argocd port-forward svc/argocd-server 8080:80              # để chạy ở một tab riêng
+  argocd login localhost:8080 --plaintext --username admin
+  ```
+
+- Đổi `argocd-cmd-params-cm` (ví dụ `server.insecure`) thì phải `kubectl -n argocd rollout restart deploy argocd-server`: giá trị đọc qua biến môi trường lúc pod khởi động. Ở cụm trắng không cần, vì ConfigMap có trước pod.
 - Mỗi lần cài lại, mật khẩu ban đầu **đổi**, và token CLI cũ hết hiệu lực.
 - Ticket G0-12 sẽ thay tài khoản `admin` bằng SSO.
 
