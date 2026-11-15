@@ -8,5 +8,8 @@ resources:
   - pg-main-hello-migrator.sealedsecret.yaml
   - pg-main-hello-app.sealedsecret.yaml
   - hello.yaml
+  # Keycloak: mật khẩu, một role LOGIN sở hữu database (G0-08 bước 7, quyết định C).
+  - pg-main-keycloak.sealedsecret.yaml
+  - keycloak.yaml
   # PgBouncer transaction cho runtime của mọi service (G0-08 bước 6).
   - pooler.yaml

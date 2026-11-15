@@ -48,6 +48,7 @@ spec:
     # Docs: https://cloudnative-pg.io/docs/1.30/postgresql_conf/, https://www.postgresql.org/docs/18/auth-pg-hba-conf.html
     pg_hba:
       - hostssl hello hello_migrator,hello_app all scram-sha-256
+      - hostssl keycloak keycloak all scram-sha-256
       - host all all all reject
 
   # requests = limits cho cả CPU và memory: QoS Guaranteed (docs Resource management). Memory theo ngân sách 1 024 Mi

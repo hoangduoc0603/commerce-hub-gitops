@@ -1,0 +1,47 @@
+# Database keycloak và role keycloak trên pg-main (G0-08 bước 7, quyết định C). Database thứ ba của cụm (sau app của
+# bootstrap và hello), thêm trong đúng một commit cùng SealedSecret pg-main-keycloak và dòng pg_hba trên Cluster.
+# Runbook: docs/runbooks/pg-main-them-service.md. Chuẩn: docs/standards/postgres-cnpg.md, docs/standards/keycloak.md
+# mục "Database". ADR-0003.
+#
+# Khác mẫu service (hello.yaml): một role LOGIN duy nhất, sở hữu database.
+# - Keycloak tự migrate schema lúc khởi động/nâng cấp bằng chính thông tin DB của nó, nên role runtime phải có DDL;
+#   tách _migrator/_app thì mỗi lần nâng cấp phải xuất SQL chạy tay.
+# - Không dùng RLS nên không có _lookup, không BYPASSRLS (tiêu chí D).
+# - Owner database tạo được bảng trong schema public (PostgreSQL 15+: public thuộc pg_database_owner), không cần GRANT.
+# - Nối thẳng pg-main-rw, không qua Pooler: Keycloak có pool Agroal riêng.
+# Giá phải trả: thông tin DB của Keycloak có DDL trên database keycloak; pg_hba giới hạn nó trong database này.
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: keycloak
+  annotations:
+    # Sau SealedSecret (1) vì đọc passwordSecret; cùng quy ước "role LOGIN ở wave 2" với hello.yaml.
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  cluster:
+    name: pg-main
+  name: keycloak
+  comment: "keycloak: owner database keycloak, Keycloak tự migrate và chạy runtime (nối thẳng pg-main-rw)"
+  login: true
+  # Bằng db-pool-max-size 20 của 1 pod Keycloak (keycloak.md hạ từ mặc định 100; đặt ở ticket 10). Ngân sách: 97
+  # dùng được, 6 database kiểu service × 12 = 72, Keycloak 20, còn 5. Lên 2 pod Keycloak thì phải xét lại ngân sách.
+  connectionLimit: 20
+  passwordSecret:
+    name: pg-main-keycloak
+  # superuser, createdb, createrole, replication, bypassrls để mặc định false; reclaim policy mặc định retain.
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: keycloak
+  annotations:
+    # Owner phải có trước (inRoles/owner trỏ tới role chưa có là "unrealizable").
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  cluster:
+    name: pg-main
+  name: keycloak
+  owner: keycloak
+  # retain: xóa CR không DROP DATABASE (mất database là mất mọi Account).
+  databaseReclaimPolicy: retain
