@@ -1,0 +1,30 @@
+# Values lab của hello cho chart app (platform/charts/app, mô tả từng key ở values.yaml của chart).
+# ApplicationSet services-lab sinh app svc-hello từ file này (apps/lab/services.yaml). Namespace hello: infra/namespaces/.
+# G0-22: image.digest và image.tag ghi tay (image của commit 16efc28, ticket G0-23). Từ G0-24, job update-gitops của hello
+# sửa hai dòng này; đừng đổi cấu trúc hai key mà job đó tìm.
+image:
+  repository: ghcr.io/hoangduoc0603/commerce-hub-hello
+  digest: sha256:5f13c9cce754d97e383c39a02cfcc4b949461664c73cf9bd72a1db9e87e1c739
+  tag: 16efc28905998e6830d8782d406c1106fbfec073
+
+# Lab chạy 1 replica cho mọi service (ADR-0004).
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: 250m
+    # Bằng limit (chart tự đặt). Đo ở G0-21: 129Mi working set lúc rảnh.
+    memory: 512Mi
+
+jvm:
+  # Heap tối đa ~307Mi trong 512Mi; chốt lại sau khi đo RSS dưới tải (spec G0, values lab của hello).
+  maxRAMPercentage: 60
+
+env:
+  SPRING_PROFILES_ACTIVE: "lab"
+
+# Ngoại lệ chỉ có ở G0: hello mở qua edge. Từ G1 chỉ seller-web, Keycloak, simulator ra ngoài.
+httpRoute:
+  enabled: true
+  hostnames:
+    - hello.lab.internal
