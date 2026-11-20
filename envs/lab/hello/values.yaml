@@ -28,3 +28,7 @@ httpRoute:
   enabled: true
   hostnames:
     - hello.lab.internal
+
+# THỬ G0-22: tắt truststore để thấy lỗi PKIX; commit sau revert.
+trust:
+  enabled: false
