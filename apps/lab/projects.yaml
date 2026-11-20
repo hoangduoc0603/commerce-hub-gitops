@@ -76,10 +76,12 @@ metadata:
     - resources-finalizer.argocd.argoproj.io
 spec:
   description: Service nghiệp vụ, sinh bằng ApplicationSet. Mỗi service một namespace do platform tạo.
-  # Registry chart OCI (10.20.0.5:5000) thêm ở ticket G0-24, khi chốt dạng repoURL của chart.
   sourceRepos:
     - https://github.com/hoangduoc0603/commerce-hub-gitops.git
-  # Thêm service: thêm namespace ở đây trong cùng commit platform tạo namespace, quota, NetworkPolicy.
+    # Chart app trên GHCR (ADR-0017, G0-22). Đúng một registry chart, không wildcard: service chỉ dùng chart dùng chung.
+    # Chart OCI public nên Argo CD không cần repository Secret (docs declarative-setup "public OCI Helm chart").
+    - ghcr.io/hoangduoc0603/charts
+  # Thêm service: thêm namespace ở đây trong cùng commit thêm infra/namespaces/<svc>.yaml (G0-22).
   destinations:
     - server: https://kubernetes.default.svc
       namespace: hello

@@ -1,0 +1,18 @@
+# Namespace của service hello (G0). hello mở ra ngoài qua https://hello.lab.internal là ngoại lệ chỉ có ở G0 (spec G0);
+# khi service G1 đầu tiên lên lab thì gỡ hello khỏi gitops.
+# - edge.lab.internal/routes: listener https của Gateway edge nhận HTTPRoute từ namespace mang nhãn này (cluster-entry.md).
+# - trust.lab.internal/inject: trust-manager chép ConfigMap lab-trust, lab-root vào đây; chart app mount bắt buộc, thiếu
+#   nhãn thì pod kẹt ContainerCreating (G0-22, bước 4).
+# - Prune=false, Delete=false: commit lỡ xóa file hay xóa app namespaces không kéo theo namespace và mọi thứ bên trong.
+#   Gỡ service thật: xóa thư mục envs/lab/<svc>/ trước (ApplicationSet dọn workload), rồi xóa file này, rồi xóa namespace tay.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: hello
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.37
+    edge.lab.internal/routes: "true"
+    trust.lab.internal/inject: "true"
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false

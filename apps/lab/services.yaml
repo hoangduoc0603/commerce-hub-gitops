@@ -7,8 +7,8 @@
 #   https://argo-cd.readthedocs.io/en/release-3.6/operator-manual/applicationset/Security/
 # - Tên app có tiền tố `svc-`: tên Application là duy nhất trong namespace argocd; thư mục envs/lab/argocd/
 #   không được sinh ra app trùng tên với app hạ tầng (vd. app argocd tự quản lý).
-# - Chart version chung cho mọi service: nâng chart là một commit ở đây (CI của chart chạy `ct install`, G0-21).
-# - Chưa chạy được đầu-cuối: chart app 0.1.0 publish ở G0-21; project commerce cho phép registry chart ở G0-24.
+# - Chart version chung cho mọi service: nâng chart là một commit ở đây (CI của chart: lint, kubeconform; `ct install` G7).
+# - Namespace do app namespaces tạo (infra/namespaces/), không CreateNamespace (G0-22).
 # - App sinh ra tự có finalizer resources-finalizer (preserveResourcesOnDeletion mặc định false): xóa thư mục
 #   service là xóa app và resource của nó. Service không giữ dữ liệu (dữ liệu ở pg-main, thuộc platform).
 # - Wave 100: root tạo ApplicationSet sau mọi app hạ tầng (wave 1–10).
@@ -44,10 +44,11 @@ spec:
     spec:
       project: commerce
       sources:
-        # Chart dùng chung từ registry OCI của lab; Argo CD không nhận tiền tố oci:// ở đây.
-        - repoURL: 10.20.0.5:5000/charts
+        # Chart dùng chung trên GHCR (ADR-0017), package public. Argo CD không nhận tiền tố oci:// ở đây.
+        # 0.2.0: httpRoute.*, trust.* (G0-22). Digest gói: sha256:83ce4f39d3802ea4f3a9602aea1902b05f39931c4a0b54b52dfc234d4b35840a
+        - repoURL: ghcr.io/hoangduoc0603/charts
           chart: app
-          targetRevision: 0.1.0
+          targetRevision: 0.2.0
           helm:
             releaseName: '{{.path.basename}}'
             valueFiles:

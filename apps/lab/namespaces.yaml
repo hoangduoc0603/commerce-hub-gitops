@@ -1,0 +1,33 @@
+# Namespace của service, kèm nhãn route và trust (infra/namespaces/). Ticket G0-22.
+# Chuẩn: docs/standards/gitops-argocd.md mục "AppProject", cluster-entry.md mục "Gateway edge và sở hữu", "Phân phối trust".
+#
+# - Wave 8: sau lab-ca (5, Bundle có trước nên ConfigMap trust được chép ngay khi namespace ra đời) và trước ApplicationSet
+#   service (100).
+# - Project platform: Namespace là tài nguyên cluster-scoped, project commerce không tạo được (clusterResourceWhitelist []).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: namespaces
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "8"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  source:
+    repoURL: https://github.com/hoangduoc0603/commerce-hub-gitops.git
+    targetRevision: main
+    path: infra/namespaces
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
