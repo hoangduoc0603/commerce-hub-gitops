@@ -4,8 +4,8 @@
 # sửa hai dòng này; đừng đổi cấu trúc hai key mà job đó tìm.
 image:
   repository: ghcr.io/hoangduoc0603/commerce-hub-hello
-  digest: sha256:1ff941677be59f74e506ae254ac6234447c7f6d5d95fce363a25ee73796afdfe
-  tag: "cb080e911330b5be5c199decb505eff0b12f7e70"
+  digest: sha256:6564e9442b1d9bfef36c2f178ea007a6a903d2dd29a099007dbadee3ef67cfbe
+  tag: "8fd52f5eaa927815c3e7557ad925f6ffa7e4c6a7"
 
 # Lab chạy 1 replica cho mọi service (ADR-0004).
 replicaCount: 1
