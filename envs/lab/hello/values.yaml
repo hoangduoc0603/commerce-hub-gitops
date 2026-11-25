@@ -5,8 +5,8 @@
 # G0-27: thêm DB (pg-main): bản sao mật khẩu hello_app, hello_migrator dạng SealedSecret, runtime qua Pooler, Job migrate.
 image:
   repository: ghcr.io/hoangduoc0603/commerce-hub-hello
-  digest: sha256:b70469dbec6f1eea6fdebcd1db1ee0360cc031504bc2c38e76c2d45b46b96c23
-  tag: "4901a65f58aa5822c1add8a9ac2d75eb66a1dcf6"
+  digest: sha256:397197e61ab2aee75cc054ed5c14184ad977cf1e52789ce31ab1d180fc389ffd
+  tag: "aef028f8ae9c1cc443188d720018ed1b5f4f172c"
 
 # Lab chạy 1 replica cho mọi service (ADR-0004).
 replicaCount: 1
