@@ -45,10 +45,11 @@ spec:
       project: commerce
       sources:
         # Chart dùng chung trên GHCR (ADR-0017), package public. Argo CD không nhận tiền tố oci:// ở đây.
-        # 0.2.0: httpRoute.*, trust.* (G0-22). Digest gói: sha256:83ce4f39d3802ea4f3a9602aea1902b05f39931c4a0b54b52dfc234d4b35840a
+        # 0.3.0: sealedSecrets, secretEnv, Job migrate PreSync (G0-27, platform#8). 0.2.0: httpRoute.*, trust.* (G0-22).
+        # Digest gói: sha256:f580fa31bf00981b6ed98e3feb1d1a20bd4072270b9efee6b6765ef7ddb82b68
         - repoURL: ghcr.io/hoangduoc0603/charts
           chart: app
-          targetRevision: 0.2.0
+          targetRevision: 0.3.0
           helm:
             releaseName: '{{.path.basename}}'
             valueFiles:

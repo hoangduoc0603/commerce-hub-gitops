@@ -2,6 +2,7 @@
 # ApplicationSet services-lab sinh app svc-hello từ file này (apps/lab/services.yaml). Namespace hello: infra/namespaces/.
 # G0-22: image.digest và image.tag ghi tay (image của commit 16efc28, ticket G0-23). Từ G0-24, job update-gitops của hello
 # sửa hai dòng này; đừng đổi cấu trúc hai key mà job đó tìm.
+# G0-27: thêm DB (pg-main): bản sao mật khẩu hello_app, hello_migrator dạng SealedSecret, runtime qua Pooler, Job migrate.
 image:
   repository: ghcr.io/hoangduoc0603/commerce-hub-hello
   digest: sha256:86dd5c79fd15a5d54e7a17c75dc8067ab297d820e61aa55d49d53efa2361e11c
@@ -22,9 +23,55 @@ jvm:
 
 env:
   SPRING_PROFILES_ACTIVE: "lab"
+  # Runtime nối qua Pooler PgBouncer transaction (pg-main-pooler-rw), role hello_app chỉ có DML (G0-08, G0-26).
+  # sslmode=require: mã hóa, KHÔNG kiểm chứng chỉ server; lệch chuẩn có chủ đích, verify-full ở G7 (ticket 27 Q4).
+  SPRING_DATASOURCE_URL: "jdbc:postgresql://pg-main-pooler-rw.postgres.svc:5432/hello?sslmode=require"
 
 # Ngoại lệ chỉ có ở G0: hello mở qua edge. Từ G1 chỉ seller-web, Keycloak, simulator ra ngoài.
 httpRoute:
   enabled: true
   hostnames:
     - hello.lab.internal
+
+# Tăng 1 trong cùng commit đổi sealedSecrets (chart app: annotation pod, để pod đọc Secret mới).
+secretRevision: 1
+
+# Bản sao mật khẩu hai role của hello, seal từ Secret pg-main-hello-* ở namespace postgres (G0-08). KHÔNG sửa tay.
+# Sinh 2026-11-25 (G0-27 bước 4); lệnh sinh, đổi mật khẩu trong một commit: docs/runbooks/pg-main-them-service.md.
+# Tên phải giữ nguyên: scope strict gắn tên và namespace hello vào bản mã.
+sealedSecrets:
+  hello-db-app:
+    type: kubernetes.io/basic-auth
+    encryptedData:
+      password: AgA52efoj8k5i4ZnMTyetyJEQhBz4d0hMxLgZp+Rxz2Qrrkb1wGspCazNIHQjmfJhE/OCk+6FEm0CHYFbYtaB6/eQZ+3esh4TKmk0s+L7hw3Pe0EDNolYou3Yb7oER4r4wjzsMZg4VRqE3iR/rRw58frwJdC11BBCKvuf3hYqhOu4CEJC56muv4rkgngX3R8nc4sNsx3w3Qw4sp2VIdVlDbn3bxwlVZapOFKb4WeqRaQzV/UTe+QpiPLwhhlFiLDgQnEVbT6AwknxaIRc4vIk2OYvGCClnyD6+jYWDwU0GxueIW2uAOkbROz+zHCdUPcUKKsmelvMDo5LFmw9xtg4RJz6YfulCY6avH4vplfYmRjgl899b198Cb1GE51Za5QLLaODu9dnbhhzPR9gTbbdPPYutIIWYTiSG9xJnk/Ffrfe0Lgbu8lS/kcCVIlqxa+2WtnxV8iK2KNaDf5b5O2i+mKwvkOXC+sfIrsJlpxgklsw2lzt9yC/VVfOSawrNuKsh9FVUqdqIWB+80rEKj+Ct4N1N7RVkwE2V6NgEzXdI2ZdbA3BMGeffpkq7NZQ4GU1IT+w64QSPp5rLVf/p858BYuNQaHZu40Kma/zSaXU1IfNmBQFMsv8K7WAKjep7yP2vay+Amr5H5Yj38J+MdIgMijtsHT9rPUGqoYwWw8QzvzS9gpUOg0VjuF8JdgxpIwXo2RiBOK7qLOVkd5wQc/GHcLL1o5Q6gcLOLmA/kRtE3Y3qN78kZ5Ul4Xq5cWyg3PdMjrHALP5GipW3kUHkL/Skaf
+      username: AgCCo1D2BLcbproWG1ziQMRH1OeEgVoZM1hoKIEmXwU3MLAk7A2ChhL/XtF3WoOZfYSMR4AlplosMQNtfugReJTFitVLPTKfjoql/LidGKpKrRcTvWmEwUHa7LZxkMdEkF5CDz7aow4WK8y0ADPIWwtyR18Xuyj2T1P7+OPtAB/eSpHHDzqma/m0gOvO6Lp+CeC2RlorjgXcCA1vQ2hT7SEfQwf+lHd9Mnnz3jrBRzTBIuqpqpIjA9mZN8i9a3R481pkCQiLb5DL8SCsOe2fYqvbqaUpJsjWuP+ftbQqbnxO04BEQrEq1sUgZBNEwtXZe/U3CdaRlIHB6HSNCSMbZ+Zl1vtHpszt8ToDBoO8UfhRVlgyp/3Th+0Q1vEzLK0Fv5HtjkquNgnZ6FXItdMpCSzvnLS1qFF6cA143S8Q3Fjz+Rq2N/Q4gNhYbJEKUYTTcvbK62cwzNzgGu+cearL2fce0YDSyGVV4AQxA6S9fIbJzqckD4z2MAzOEn0MqNEo6rlj18AQ0xAZDXIYTqriIgUEiXFaLON/eDAZbJmEdB7IFEQefRUKtCIwMEz04a86JHTX/KynGvllc4BhE8ykGodKBu6qFCR+2sESbN2FgM5kugt/kjPAEpli8zQnNzLQrxO/QgYu2TQ+MQvGabl3Ojp2cApzEY2GJ4ERkNR6pWm1FgG6BpXLQeT00UII14hrRF4QMNz5MJVuU1k=
+  # Hook PreSync wave -1: phải có trước Job migrate. Sync thành công thì bị xóa, credential migrate chỉ sống lúc sync.
+  hello-db-migrator:
+    type: kubernetes.io/basic-auth
+    preSync: true
+    encryptedData:
+      password: AgAKbUW+xK8+4FT/H/BqURmWXjZTVib5FJOuGQGEvPWUfi4gA/h1Im++B/wTOyfs6QHLSSMEC+9osDxlJdc9WIpAqY/Q0kCXu/yY3rwDr6I6fxsM3JTJYECopTE5Cm0Yj8YTU44PaxcMQjrHsgR4WuxnK9UWpENbgNTw+VEZTVf8SCKSCAR0OC6DbYCTipOcD+jdtzCfJULI0YSUzKqL+KKfQ5V/WTPVvoeUOtujddTeEEMLKOPj/PleOTGaX+nPIoHw2erIVWEF3cE+ZC4RjWo+stOrvqvDpbxboRN26TQpSvp/91cO9aFxgk5LxFMTpqJSZetMPdgIZXLEnqyliMWyxLt8nBTwOKGfvqYHyM6XaQNotsow6yl97u1JaxSWQbxfLtrKuVpGeQ6KrWS5NKed9XnUtTE/Gf8NCiQLwFlmLT+UIp1Mu2bomhWZeY3gm5qFpJWhcN/Wn+qTNxTckrU3AA+1QdkaXdxw6KjC7gFk1hAzRSahIARkDL6XdHH8jkA5f+HeAuLb95seKg+VkLW3UJkYf+vFEafYykaj9ZOTdCnuANiTDFNNC9/pls4tzDlvS5ftWuQVO9EiD+adZ9oGhi0Q0FvSHce9AKlTOD1WVasQm0SMkY98ZwkHjAkrW8rWeg06kYRg0j/g9CITYDZB+guae+s+Ns3u1NHX4POycmcwxKgIRex+EbM92CFxbS59TgglkBOLbs1cP7QCvm7Bfta6us7MzSBqRGVVp+pmHcD8NJIlepmkQVriQIPlJ8ZAtiqf56TdQs4BhNiXtpIZ
+      username: AgCYaABVuqzLeYVQwWkIi+ldrtrCpLaGbgEol6sVavIEE/qn0YWDUXAdT18UYZYvrfYP6WzCYZda78ZhNPjlVMAQH0lTj7PUKQ9H8f+TvpA0nGqRePH9uJ9bxS8c49TpdgwwIc7J4bTRvYo0bxG3C8or8nsWIytdsNfpVJbp3oZKBo8TSqbWClrdmx6yfxDRICNZ9Cr2vshToSYI7o6iWrmnbenOFfvysZc8WPUNsLSOkr/wUq23ylnp+qwgxpqoRoP2N6jMRYA78bJdIQQd9F1vwjB2eZnZZ56TKmGVTcrrmG099F4j/J9KOo4XHCHgroxx0o0aUhdvhqbmnn9IDp8XUss4ATTkqEmoH+VVQk/xdiOlys3DYM9A9YPZwrpOCaL5MVDEddp7D6hiAWXgiU/zTob4NDvWmP1VKjJPg5fALz1LyncSGMC/zAffxa4tcT3KhXD9kG19ys1H5PmLbpxTF0CpSvPJse7SNvn69Npd4Ai+P3EesZ35JKDZZJPUAE8fXRx5AHCufIHLWQ5t4UA4BH+5FxqFY6+H6/1LyVOtgTrQYM2HD34VmrgmebneU7hQJwkOiLNMcPKZJGA48LYpPzGKbKKApZqEwCTP+fPrV1r9TM/twyXXSoctbLQPQsyxkB9xZzKpAc5T9oYl3Vz324aUKW0u/E9vTvkFVfLnsp1ZYZnj6LLY/TsT0XXntgAx6khcJCa8BjLjT9OY9A==
+
+secretEnv:
+  SPRING_DATASOURCE_USERNAME:
+    secret: hello-db-app
+    key: username
+  SPRING_DATASOURCE_PASSWORD:
+    secret: hello-db-app
+    key: password
+
+# Job migrate PreSync (chart app 0.3.0). TẮT cho tới khi lab chạy image có profile migrate (merge g0-26, G0-27 bước 5):
+# image hiện tại không có profile đó, Job sẽ khởi động web server và treo tới activeDeadlineSeconds.
+migration:
+  enabled: false
+  env:
+    # Nối THẲNG primary, không qua Pooler: Flyway cần advisory lock cấp session và SET (db-migration.md).
+    SPRING_FLYWAY_URL: "jdbc:postgresql://pg-main-rw.postgres.svc:5432/hello?sslmode=require"
+  secretEnv:
+    SPRING_FLYWAY_USER:
+      secret: hello-db-migrator
+      key: username
+    SPRING_FLYWAY_PASSWORD:
+      secret: hello-db-migrator
+      key: password
