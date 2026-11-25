@@ -61,10 +61,10 @@ secretEnv:
     secret: hello-db-app
     key: password
 
-# Job migrate PreSync (chart app 0.3.0). TẮT cho tới khi lab chạy image có profile migrate (merge g0-26, G0-27 bước 5):
-# image hiện tại không có profile đó, Job sẽ khởi động web server và treo tới activeDeadlineSeconds.
+# Job migrate PreSync (chart app 0.3.0). Bật từ G0-27 bước 5: image có profile migrate (g0-26). Job lỗi thì sync dừng,
+# Deployment giữ bản cũ.
 migration:
-  enabled: false
+  enabled: true
   env:
     # Nối THẲNG primary, không qua Pooler: Flyway cần advisory lock cấp session và SET (db-migration.md).
     SPRING_FLYWAY_URL: "jdbc:postgresql://pg-main-rw.postgres.svc:5432/hello?sslmode=require"
