@@ -1,0 +1,10 @@
+# Keycloak 26.8.2 (CR của Keycloak Operator, app keycloak-operator). Ticket G0-10.
+# Chuẩn: docs/standards/keycloak.md, docs/standards/cluster-entry.md mục "Keycloak qua Gateway".
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Ép mọi object vào namespace keycloak (namespace do app keycloak-operator tạo).
+namespace: keycloak
+resources:
+  # Thông tin DB: role keycloak trên pg-main (infra/pg-main/keycloak.yaml), bản sao seal lại cho namespace này.
+  - keycloak-db.sealedsecret.yaml
+  # Bước 3: keycloak.yaml (CR Keycloak). Bước 5: httproute.yaml.

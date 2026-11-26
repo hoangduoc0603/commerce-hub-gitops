@@ -1,0 +1,35 @@
+# Keycloak: CR Keycloak, thông tin DB, HTTPRoute auth.lab.internal (infra/keycloak/). Ticket G0-10.
+# Chuẩn: docs/standards/keycloak.md. ADR-0003 (DB trên pg-main), ADR-0004 (1 instance), ADR-0013 (Gateway edge).
+#
+# - Wave 8: sau pg-main (7), vì Keycloak migrate schema vào database keycloak ngay lúc khởi động; sau keycloak-operator (6),
+#   vì CRD và operator phải có trước CR.
+# - Không CreateNamespace: namespace keycloak do app keycloak-operator tạo.
+# - Health: Argo CD 3.6.1 có sẵn health check cho k8s.keycloak.org/Keycloak (Ready=True là Healthy, HasErrors là Degraded).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: keycloak
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "8"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  source:
+    repoURL: https://github.com/hoangduoc0603/commerce-hub-gitops.git
+    targetRevision: main
+    path: infra/keycloak
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: keycloak
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
