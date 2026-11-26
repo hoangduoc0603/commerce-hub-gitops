@@ -61,6 +61,34 @@ spec:
     # đo và sửa. Không đặt trường này thì operator rơi về proxy=passthrough đã deprecated.
     headers: xforwarded
 
+  # Cổng 8080 (HTTP) chỉ nhận từ pod Envoy của Gateway edge và pod trong namespace keycloak; trước đó operator để mở cho
+  # mọi nguồn (luật không có `from`): đo 2026-11-27, pod ở namespace default đọc được /realms/master qua
+  # keycloak-service:8080 (200), tức vượt route của edge và vượt ClientTrafficPolicy (G0-10 bước 7).
+  # Cổng 9000 (management): giữ mặc định tới ticket 13 (chỉ namespace observability). JGroups 7800: operator tự giới hạn.
+  # kubectl port-forward không đi qua NetworkPolicy.
+  networkPolicy:
+    enabled: true
+    http:
+      # Hai selector trong CÙNG một phần tử là AND: pod mang nhãn này VÀ ở namespace envoy-gateway-system.
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: envoy-gateway-system
+        podSelector:
+          matchLabels:
+            gateway.envoyproxy.io/owning-gateway-name: edge
+            gateway.envoyproxy.io/owning-gateway-namespace: edge
+      # Pod cùng namespace keycloak: Job keycloak-config-cli (ticket 11) gọi admin API qua keycloak-service:8080, vì admin
+      # API không mở qua edge. Service nào cần jwk-set-uri nội bộ thì thêm namespace của nó ở đây.
+      - podSelector: {}
+
+  additionalOptions:
+    # Chỉ đọc X-Forwarded-* khi kết nối đến từ dải pod (IP pool default-ipv4-ippool của Calico). IP pod Envoy thay đổi nên
+    # không ghim được một IP; NetworkPolicy ở trên mới là ranh giới thật (docs Keycloak: "weak protection", phải kèm cô lập
+    # mạng). Request qua port-forward đến từ 127.0.0.1, không thuộc dải, nên header của nó bị bỏ qua (trước: tin, đo
+    # 2026-11-27 event ghi 6.6.6.6).
+    - name: proxy-trusted-addresses
+      value: 10.244.0.0/16
+
   # Cửa vào là HTTPRoute trên Gateway edge (bước 5), không phải Ingress do operator tạo.
   ingress:
     enabled: false
