@@ -1,0 +1,43 @@
+# Keycloak qua Gateway edge: https://auth.lab.internal, chỉ phần công khai của realm commerce-hub (G0-10 bước 5).
+# Chuẩn: docs/standards/cluster-entry.md mục "Keycloak qua Gateway", keycloak.md mục "Hostname, TLS, reverse proxy".
+# - Chỉ ba PathPrefix. KHÔNG dùng /realms/ (phủ cả /realms/master/). Không mở /admin/, /metrics, /health; cổng 9000
+#   (management) không bao giờ được route. Admin Console chỉ qua port-forward (docs/runbooks/keycloak-admin.md).
+# - PathPrefix so theo từng phần tử đường dẫn: /realms/commerce-hub không khớp /realms/commerce-hubX (Gateway API v1.6.1).
+# - edge kết thúc TLS, nói HTTP tới 8080 (re-encrypt bằng BackendTLSPolicy: Hoãn tới G7).
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: keycloak
+spec:
+  parentRefs:
+    - name: edge
+      namespace: edge
+      # Chỉ listener https; listener http (80) chỉ nhận route trong namespace edge (chuyển sang https).
+      sectionName: https
+  hostnames:
+    - auth.lab.internal
+  rules:
+    - matches:
+        # Đăng nhập, token, JWKS, discovery của realm ứng dụng.
+        - path:
+            type: PathPrefix
+            value: /realms/commerce-hub
+        # CSS, JS, ảnh của trang đăng nhập (theme).
+        - path:
+            type: PathPrefix
+            value: /resources/
+        # Docs Keycloak liệt kê trong nhóm path được phép mở (Reverse proxy guide).
+        - path:
+            type: PathPrefix
+            value: /.well-known/
+      backendRefs:
+        - name: keycloak-service
+          port: 8080
+      filters:
+        # HSTS như route argocd: trình duyệt tự đổi sang https từ lần thứ hai, không gửi cookie phiên đăng nhập
+        # (KEYCLOAK_SESSION, AUTH_SESSION_ID) qua http:// trước khi nhận 301. 1 năm, không includeSubDomains.
+        - type: ResponseHeaderModifier
+          responseHeaderModifier:
+            set:
+              - name: Strict-Transport-Security
+                value: max-age=31536000

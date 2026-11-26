@@ -9,4 +9,5 @@ resources:
   - keycloak-db.sealedsecret.yaml
   # CR Keycloak (bước 3). Wave mặc định 0: sau SealedSecret keycloak-db (-1).
   - keycloak.yaml
-  # Bước 5: httproute.yaml.
+  # Route công khai qua Gateway edge (bước 5).
+  - httproute.yaml
