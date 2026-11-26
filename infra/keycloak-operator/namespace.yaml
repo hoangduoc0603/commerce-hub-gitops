@@ -1,0 +1,18 @@
+# Namespace của Keycloak Operator và Keycloak (G0-10). Operator 26.8.2 chạy kiểu namespace-scoped (JOSDK_WATCH_CURRENT):
+# chỉ thấy CR trong namespace của nó, nên CR Keycloak (app keycloak, bước 3) cũng nằm ở đây. Tên phải là "keycloak":
+# ClusterRoleBinding của upstream ghi cứng namespace này.
+# - restricted: Deployment của operator upstream không có securityContext, được vá trong kustomization.yaml. Pod
+#   Keycloak do operator tạo cũng phải qua mức này (kiểm ở bước 3).
+# - edge.lab.internal/routes: HTTPRoute auth.lab.internal (bước 5) gắn được vào listener https của Gateway edge.
+# - Chưa có trust.lab.internal/inject: chỉ cần khi re-encrypt bằng BackendTLSPolicy (Hoãn tới G7).
+# - Prune=false, Delete=false: commit lỡ hay xóa app không kéo theo namespace (xóa namespace là xóa Keycloak và Secret).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: keycloak
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.37
+    edge.lab.internal/routes: "true"
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false

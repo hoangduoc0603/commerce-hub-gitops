@@ -1,0 +1,68 @@
+# Keycloak Operator 26.8.2, namespace-scoped ở namespace keycloak. Ticket G0-10 bước 1.
+# Chuẩn: docs/standards/keycloak.md mục "Cài trên Kubernetes bằng Operator". Docs: https://www.keycloak.org/operator/installation
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  # Chép nguyên văn thư mục kubernetes/ của github.com/keycloak/keycloak-k8s-resources tag 26.8.2, tải 2026-11-26.
+  # sha256:
+  #   fd702341f6442d432190e6c83b82c2f105f8ba91b635a99bc300af29343265ac  kustomization.yml
+  #   1514a7251bfd51968d6dfcadc3f2807a4f9abc7bac28bb76b33f154d6aebeac4  kubernetes.yml
+  #   20c51247cb6cbc6158098caabeaf6b429dc8c016e35829f5ddd9c468b7582667  keycloaks.k8s.keycloak.org-v1.yml
+  #   8d552e1864d78117a07e535479ddb36e16a42b2695726c875f44828e1323edd4  keycloakrealmimports.k8s.keycloak.org-v1.yml
+  #   15d9199822d1918438bd1d093eee3ec8406e7f9d0837c4527fd6da99c63b058a  keycloakoidcclients.k8s.keycloak.org-v1.yml
+  #   7c69d146f610f3c40acf4466518e89615b6fce7ee2a03d75cd93b7a9a7bf259e  keycloaksamlclients.k8s.keycloak.org-v1.yml
+  # Giữ kustomization.yml của upstream: NamespaceTransformer setRoleBindingSubjects: allServiceAccounts điền namespace cho
+  # subject của 5 RoleBinding (`namespace:` thường chỉ điền cho SA "default"). Lệch với keycloak.md (remote base
+  # `kubectl apply -k github.com/...`): vendor để diff khi nâng nằm trong PR, render không phụ thuộc GitHub, và gắn được
+  # annotation cho CRD; cùng cách với CloudNativePG, Envoy Gateway.
+  # NÂNG CẤP: tải lại cả thư mục theo tag mới, xem diff, sửa sha256 và digest bên dưới trong cùng commit. Một bản Operator
+  # chỉ chạy đúng một bản Keycloak: đổi spec.image của CR Keycloak (infra/keycloak/) cùng commit.
+  - upstream
+
+patches:
+  # Xóa CRD keycloaks.k8s.keycloak.org là xóa CR Keycloak, rồi GC xóa StatefulSet, Service theo ownerReference.
+  # Prune=false chặn commit lỡ; Delete=false chặn cascade khi xóa app. Cùng mẫu với infra/cloudnative-pg/.
+  - target:
+      group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+    patch: |-
+      apiVersion: apiextensions.k8s.io/v1
+      kind: CustomResourceDefinition
+      metadata:
+        name: any
+        annotations:
+          argocd.argoproj.io/sync-options: Prune=false,Delete=false
+  # kubernetes.yml 26.8.2 không có securityContext; thiếu bản vá này thì PSA restricted của namespace keycloak từ chối pod
+  # (ReplicaSet FailedCreate). Image chạy user 1000 (số), nên kubelet kiểm được runAsNonRoot.
+  # https://kubernetes.io/docs/concepts/security/pod-security-standards/#restricted
+  - target:
+      kind: Deployment
+      name: keycloak-operator
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: keycloak-operator
+      spec:
+        template:
+          spec:
+            securityContext:
+              runAsNonRoot: true
+              seccompProfile:
+                type: RuntimeDefault
+            containers:
+              - name: keycloak-operator
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  capabilities:
+                    drop: ["ALL"]
+  # Resources giữ mặc định upstream (request = limit memory 450Mi; CPU request 300m, limit 700m). Mức tối thiểu: theo mặc
+  # định của operator. 450Mi + 1,5Gi của Keycloak nằm trong ngân sách "Keycloak + operator ~2 GB" (ADR-0004).
+
+images:
+  # Tag 26.8.2 đã bị đẩy lại trên quay.io (digest cũ df890db9… dùng tới 2026-11-19), nên phải ghim digest. Đây là image
+  # index đa kiến trúc. Kustomize bỏ tag khi đặt digest: image thành quay.io/keycloak/keycloak-operator@sha256:….
+  # Tra lại: docker buildx imagetools inspect quay.io/keycloak/keycloak-operator:<tag>
+  - name: quay.io/keycloak/keycloak-operator
+    digest: sha256:f9b9a2be5db09d988c3706a6685763de1a3ac2b2f61315b21539cb99d0594efb
