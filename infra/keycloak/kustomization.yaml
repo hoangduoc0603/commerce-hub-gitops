@@ -7,4 +7,6 @@ namespace: keycloak
 resources:
   # Thông tin DB: role keycloak trên pg-main (infra/pg-main/keycloak.yaml), bản sao seal lại cho namespace này.
   - keycloak-db.sealedsecret.yaml
-  # Bước 3: keycloak.yaml (CR Keycloak). Bước 5: httproute.yaml.
+  # CR Keycloak (bước 3). Wave mặc định 0: sau SealedSecret keycloak-db (-1).
+  - keycloak.yaml
+  # Bước 5: httproute.yaml.

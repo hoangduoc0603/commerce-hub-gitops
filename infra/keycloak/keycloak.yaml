@@ -1,0 +1,89 @@
+# CR Keycloak: 1 instance Keycloak 26.8.2 chế độ production (lệnh start), DB keycloak trên pg-main. Ticket G0-10 bước 3.
+# Chuẩn: docs/standards/keycloak.md mục "Cài trên Kubernetes bằng Operator", "Database", "Hostname, TLS, reverse proxy".
+# API: CRD keycloaks.k8s.keycloak.org bản v2beta1 (storage) trong infra/keycloak-operator/upstream/.
+# Operator dựng: StatefulSet keycloak (pod keycloak-0), Service keycloak-service (8080 http, 9000 management),
+# Service keycloak-discovery (JGroups), NetworkPolicy keycloak-network-policy, Secret keycloak-initial-admin.
+apiVersion: k8s.keycloak.org/v2beta1
+kind: Keycloak
+metadata:
+  name: keycloak
+spec:
+  # Lệch chuẩn có chủ đích (ADR-0004, keycloak.md mục lệch chuẩn): production cần ≥ 2. Mỗi lần đổi image là downtime
+  # đăng nhập; token đã cấp vẫn dùng được tới khi hết hạn.
+  instances: 1
+
+  # Image chính thức (image tùy biến có theme, passwordBlacklist: Hoãn tới G1). Ghim digest vì tag 26.8.2 đã bị đẩy lại
+  # trên quay.io (c68e286c… dùng 2026-11-12 → 2026-11-19). Image index đa kiến trúc, user 1000.
+  # NÂNG CẤP: đổi cùng commit với bản operator (infra/keycloak-operator/), một Operator chạy đúng một bản Keycloak.
+  image: quay.io/keycloak/keycloak:26.8.2@sha256:7e66a96e4739239070aeaf72e4c5decf0f7f682cfc725b9f7ea2b336eaba38b3
+  # Bắt buộc khi đặt spec.image với image chưa `kc.sh build`: bỏ trống thì operator coi image là tùy biến đã tối ưu và chạy
+  # `start --optimized` (mô tả trường startOptimized trong CRD 26.8.2). false: start tự build lại option db=postgres,
+  # health-enabled lúc khởi động (chậm hơn vài chục giây, log "Updating the configuration").
+  startOptimized: false
+
+  db:
+    vendor: postgres
+    # Nối thẳng pg-main-rw, không qua Pooler: Keycloak có pool Agroal riêng (G0-08 quyết định C). sslmode=require để khớp
+    # dòng hostssl của pg_hba; mã hóa nhưng không kiểm chứng chỉ server (verify-full ở G7, như hello, ticket 27 Q4).
+    url: jdbc:postgresql://pg-main-rw.postgres.svc:5432/keycloak?sslmode=require
+    usernameSecret:
+      name: keycloak-db
+      key: username
+    passwordSecret:
+      name: keycloak-db
+      key: password
+    # Hạ từ mặc định 100 (keycloak.md mục Database). Bằng connectionLimit 20 của role keycloak (infra/pg-main/keycloak.yaml);
+    # lên 2 pod thì xét lại ngân sách kết nối của pg-main.
+    poolMaxSize: 20
+
+  hostname:
+    # URL đầy đủ: mọi URL Keycloak sinh cho trình duyệt (kể cả iss của token) là https://auth.lab.internal, không đọc từ
+    # header của request. https vì client chỉ thấy edge (kết thúc TLS), dù Keycloak nghe HTTP.
+    hostname: https://auth.lab.internal
+    # Hai dòng dưới là mặc định, ghi ra để đọc file là thấy chính sách (keycloak.md).
+    strict: true
+    backchannelDynamic: false
+
+  http:
+    # edge kết thúc TLS và nói HTTP tới 8080 (lệch chuẩn, re-encrypt bằng BackendTLSPolicy Hoãn tới G7). Không có
+    # tlsSecret nên Service chỉ có cổng http.
+    httpEnabled: true
+
+  proxy:
+    # Đọc X-Forwarded-For/-Proto/-Host do Envoy gửi. Envoy mặc định NỐI THÊM vào X-Forwarded-For thay vì ghi đè; bước 6
+    # đo và sửa. Không đặt trường này thì operator rơi về proxy=passthrough đã deprecated.
+    headers: xforwarded
+
+  # Cửa vào là HTTPRoute trên Gateway edge (bước 5), không phải Ingress do operator tạo.
+  ingress:
+    enabled: false
+
+  # update.strategy: giữ mặc định RecreateOnImageChange (lệch keycloak.md, chốt khi duyệt lộ trình): 1 instance thì rolling
+  # update vẫn có downtime, còn Auto chạy thêm một Job bằng image Keycloak để so tương thích, tốn RAM mà không được gì.
+
+  resources:
+    # Request = limit memory 1,5 Gi (keycloak.md, lệch chuẩn có chủ đích: hướng dẫn container khuyên 2 GB). Heap mặc định
+    # 70% limit (~1 075 Mi). Không CPU limit (tránh throttle lúc khởi động có build lại); request 500m.
+    requests:
+      cpu: 500m
+      memory: 1536Mi
+    limits:
+      memory: 1536Mi
+
+  unsupported:
+    # Operator 26.8.2 không đặt securityContext nào cho pod Keycloak (KeycloakDeploymentDependentResource.java), nên PSA
+    # restricted của namespace keycloak sẽ từ chối pod. Operator lấy podTemplate này làm khung rồi chỉ sửa container đầu
+    # (name, image, args, env, port, probe), nên các trường dưới được giữ. "unsupported": docs ghi không được hỗ trợ chính
+    # thức; kiểm lại khi nâng operator.
+    podTemplate:
+      spec:
+        securityContext:
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
+        containers:
+          - name: keycloak
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop: ["ALL"]
