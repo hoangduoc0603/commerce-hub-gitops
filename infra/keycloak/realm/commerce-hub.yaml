@@ -101,6 +101,8 @@ clients:
     implicitFlowEnabled: false
     directAccessGrantsEnabled: false
     frontchannelLogout: false
+    # Không cần role nào trong token. Keycloak 26.8 cảnh báo "Full scope allowed" là deprecated.
+    fullScopeAllowed: false
     attributes:
       # Không cấp refresh token cho client credentials (tùy chọn deprecated, mặc định đã tắt; ghi ra để thấy chính sách).
       client_credentials.use_refresh_token: "false"
