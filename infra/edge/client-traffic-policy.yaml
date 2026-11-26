@@ -1,0 +1,34 @@
+# Chính sách phía client của Gateway edge (G0-10 bước 6). Chuẩn: docs/standards/cluster-entry.md mục "Keycloak qua
+# Gateway", keycloak.md mục "Hostname, TLS, reverse proxy" (test giả mạo X-Forwarded-For bắt buộc).
+#
+# Vấn đề (đo 2026-11-27, trước khi có file này): Envoy NỐI THÊM địa chỉ client vào X-Forwarded-For có sẵn thay vì ghi đè,
+# còn Keycloak 26.8.2 (Quarkus 3.40.1 ForwardedParser: getFirstElement) đọc PHẦN TỬ ĐẦU. Đăng nhập sai kèm
+# `X-Forwarded-For: 6.6.6.6` cho event LOGIN_ERROR ipAddress="6.6.6.6"; không kèm header thì "10.20.0.5" (gw SNAT).
+# Brute force theo IP và audit bị qua mặt.
+# Sửa: xóa mọi header chuyển tiếp do client gửi ở earlyRequestHeaders, chạy TRƯỚC thao tác header dựng sẵn của Envoy;
+# sau đó Envoy tự thêm X-Forwarded-For (IP nó thấy) và X-Forwarded-Proto. Không có proxy HTTP nào đứng trước edge (gw
+# chỉ SNAT), nên không header nào từ ngoài đáng tin (numTrustedHops mặc định 0).
+# Áp cho mọi route của edge (argocd., hello., auth.): không backend nào phải tự lọc.
+# API: https://gateway.envoyproxy.io/docs/api/extension_types/#clienttrafficpolicy (v1.10)
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: ClientTrafficPolicy
+metadata:
+  name: edge
+  namespace: edge
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: edge
+  headers:
+    earlyRequestHeaders:
+      remove:
+        - X-Forwarded-For
+        # Envoy mặc định không tự thêm Host/Port; để lại thì backend đọc được giá trị client đặt. Keycloak với hostname
+        # strict không dùng hai header này cho URL, nhưng backend khác (Spring forward-headers) có thể dùng.
+        - X-Forwarded-Host
+        - X-Forwarded-Port
+        # Envoy tự đặt lại sau bước này (https vì listener TLS).
+        - X-Forwarded-Proto
+        # Chuẩn RFC 7239; Keycloak dùng xforwarded nên không đọc, nhưng backend khác có thể đọc.
+        - Forwarded

@@ -9,3 +9,5 @@ resources:
   - gateway.yaml
   - http-redirect.yaml
   - argocd-route.yaml
+  # Xóa header chuyển tiếp do client gửi trước khi Envoy nối IP thật (G0-10 bước 6).
+  - client-traffic-policy.yaml
