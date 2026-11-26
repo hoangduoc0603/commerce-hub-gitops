@@ -1,0 +1,122 @@
+# Realm commerce-hub dạng code, áp bằng Job keycloak-config-cli (keycloak-config-cli.yaml). Ticket G0-11, story 28–30.
+# Chuẩn: docs/standards/keycloak.md mục "Realm dạng code", "Token, phiên, brute force", "Client OIDC". ADR-0008.
+#
+# Cách áp (keycloak-config-cli 6.6.0, docs README "Import options", "Variable Substitution"):
+# - Chỉ khai trường muốn quản lý; trường không khai giữ giá trị đang có trên server. Trường đã khai bị ghi đè mỗi lần chạy,
+#   kể cả khi ai đó sửa tay trên Admin Console (IMPORT_CACHE_ENABLED=false trong Job, xem lý do ở đó).
+# - Client, group, role, client scope: tài nguyên do công cụ tạo ra mà bị xóa khỏi file thì bị xóa trên server
+#   (remote state, docs/MANAGED.md). Tài nguyên tạo tay không bị xóa.
+# - $(env:X): thay bằng biến môi trường của Job lúc chạy (secret lấy từ SealedSecret, không nằm trong Git).
+#
+# Phạm vi G0 (spec G0 mục "Sửa phạm vi 2026-11-15"): brute force, SMTP, token/phiên, event, client smoke-test, group
+# ops-admin. Chưa có (G1): đăng ký, quên mật khẩu, theme, passwordPolicy, client seller-web/admin-web, role platform-admin.
+# Chưa có (G7): client argocd, grafana cho SSO.
+# Realm master KHÔNG quản lý ở đây (lý do: docs/runbooks/keycloak-admin.md mục "Realm master và keycloak-config-cli").
+realm: commerce-hub
+enabled: true
+displayName: commerce-hub
+# HTTPS bắt buộc với mọi request không đến từ địa chỉ riêng. Request qua edge mang X-Forwarded-Proto: https.
+sslRequired: external
+
+# --- Đăng nhập ---------------------------------------------------------------------------------------------------------
+# Account đăng nhập bằng email (keycloak.md mục "Account, Workspace và vai trò"). Đăng ký, quên mật khẩu: G1.
+loginWithEmailAllowed: true
+duplicateEmailsAllowed: false
+registrationAllowed: false
+resetPasswordAllowed: false
+# Tắt: bật thì Keycloak chặn đăng nhập tới khi xác minh xong, trái F1.1a. Xác minh chạy bằng kc_action=VERIFY_EMAIL (G1).
+verifyEmail: false
+
+# --- Token và phiên (keycloak.md mục "Token, phiên, brute force") -----------------------------------------------------
+# 5 phút: giới hạn thời gian một access token bị lộ còn dùng được. Thu hồi quyền nhanh đi đường Member (ADR-0008).
+accessTokenLifespan: 300
+ssoSessionIdleTimeout: 1800
+ssoSessionMaxLifespan: 36000
+# Refresh token dùng một lần: dùng lại refresh token cũ sau khi đã refresh thì nhận invalid_grant (C5.3).
+revokeRefreshToken: true
+refreshTokenMaxReuse: 0
+
+# --- Brute force theo BR-02 ---------------------------------------------------------------------------------------------
+# Sai 5 lần liên tiếp, mỗi lần cách lần trước ≤ 15 phút, thì khóa 15 phút. Hai lần sai cách nhau < 1 s thì chờ 1 phút.
+# Khóa tạm, không khóa vĩnh viễn: khóa vĩnh viễn biến dò mật khẩu thành tấn công từ chối dịch vụ lên Account
+# (keycloak.md bảng lựa chọn). Ngưỡng 5 thấp hơn mức thường gặp (~30): lệch chuẩn có chủ đích, SRS thắng.
+bruteForceProtected: true
+permanentLockout: false
+# 0: không giới hạn số lần khóa tạm (lớn hơn 0 thì quá số đó Keycloak chuyển sang khóa vĩnh viễn).
+maxTemporaryLockouts: 0
+# Số lần sai trước khi khóa (Admin Console: "Max login failures").
+failureFactor: 5
+# Thời gian khóa: tăng 900 s mỗi lần, trần 900 s, nên luôn là 15 phút.
+waitIncrementSeconds: 900
+maxFailureWaitSeconds: 900
+# Bộ đếm về 0 khi lần sai mới cách lần sai trước quá 15 phút ("Failure reset time").
+maxDeltaTimeSeconds: 900
+quickLoginCheckMilliSeconds: 1000
+minimumQuickLoginWaitSeconds: 60
+
+# --- Event: nguồn audit cho đăng nhập và thay đổi cấu hình (F1.3) ------------------------------------------------------
+# Lưu 7 ngày trong DB keycloak. Listener giữ mặc định jboss-logging (log của pod).
+eventsEnabled: true
+eventsExpiration: 604800
+adminEventsEnabled: true
+# Không lưu representation trong admin event: có thể chứa dữ liệu nhạy cảm, và audit chỉ cần ai đổi gì lúc nào.
+adminEventsDetailsEnabled: false
+attributes:
+  adminEventsExpiration: "604800"
+
+# --- SMTP: Mailpit trên gw (ADR-0014, cluster-entry.md mục "Mailpit trên gw") -------------------------------------------
+# Không TLS, không xác thực: Mailpit chỉ tới được trong lab và tailnet (lệch chuẩn có chủ đích). Đọc thư ở
+# http://10.20.0.5:8025. Egress của Keycloak không bị NetworkPolicy chặn (policy của operator chỉ có Ingress).
+smtpServer:
+  host: 10.20.0.5
+  port: "1025"
+  from: no-reply@lab.internal
+  fromDisplayName: commerce-hub (lab)
+  ssl: "false"
+  starttls: "false"
+  auth: "false"
+
+# --- Group ---------------------------------------------------------------------------------------------------------------
+# Người vận hành lab (spec G0 mục Keycloak). G7: client argocd, grafana map group này sang quyền admin của Argo CD và
+# Grafana. Không phải Platform Admin (role platform-admin, G1) và không phải Member của Workspace nào (GLOSSARY).
+# Không có user nào trong file: tài khoản tạo tay theo runbook keycloak-admin.md, realm-as-code không chứa mật khẩu.
+groups:
+  - name: ops-admin
+
+# --- Client --------------------------------------------------------------------------------------------------------------
+clients:
+  # Client test cho smoke test (repo e2e) và k6: lấy access token mà không cần tài khoản người dùng (story 29).
+  # Confidential, chỉ bật client credentials (service account). Secret: SealedSecret realm-commerce-hub, cũng là secret
+  # của repo e2e (ticket 31).
+  - clientId: smoke-test
+    name: Smoke test (client credentials)
+    enabled: true
+    protocol: openid-connect
+    publicClient: false
+    clientAuthenticatorType: client-secret
+    secret: $(env:SMOKE_TEST_CLIENT_SECRET)
+    serviceAccountsEnabled: true
+    # Tắt mọi luồng có người dùng (keycloak.md: tắt Implicit và Direct Access Grants cho mọi client).
+    standardFlowEnabled: false
+    implicitFlowEnabled: false
+    directAccessGrantsEnabled: false
+    frontchannelLogout: false
+    attributes:
+      # Không cấp refresh token cho client credentials (tùy chọn deprecated, mặc định đã tắt; ghi ra để thấy chính sách).
+      client_credentials.use_refresh_token: "false"
+    # Chỉ scope basic (sub, auth_time). Bỏ profile, email, roles: service account không có hồ sơ, và scope roles thêm
+    # aud "account" qua mapper audience resolve. Kết quả: aud chỉ có commerce-hub-api.
+    defaultClientScopes:
+      - basic
+    optionalClientScopes: []
+    protocolMappers:
+      # Resource server kiểm aud = commerce-hub-api (keycloak.md mục "Client OIDC", ticket 29). Không có aud thì token
+      # cấp cho client khác cũng lọt qua.
+      - name: audience-commerce-hub-api
+        protocol: openid-connect
+        protocolMapper: oidc-audience-mapper
+        config:
+          included.custom.audience: commerce-hub-api
+          access.token.claim: "true"
+          id.token.claim: "false"
+          introspection.token.claim: "true"

@@ -1,0 +1,112 @@
+# Job keycloak-config-cli: áp realm/commerce-hub.yaml vào Keycloak qua admin API. Ticket G0-11, story 28.
+# Chuẩn: docs/standards/keycloak.md mục "Realm dạng code". Runbook: docs/runbooks/keycloak-admin.md.
+#
+# Khi nào chạy: hook PostSync của app keycloak, tức sau MỖI lần sync thành công và mọi tài nguyên đã Healthy (CR Keycloak
+# Ready=True). Đổi realm/commerce-hub.yaml → ConfigMap đổi tên (hash) → app OutOfSync → auto-sync → Job chạy lại.
+# Sửa tay trên Admin Console không làm app OutOfSync; lần sync kế tiếp (đổi Git, hoặc bấm Sync) sẽ ghi đè.
+# Chạy lại bằng tay: `argocd app sync keycloak` (hoặc nút Sync), không cần đổi Git.
+#
+# BeforeHookCreation: Job cũ chỉ bị xóa khi sync kế tiếp tạo Job mới, nên log lần chạy gần nhất luôn đọc được
+# (`kubectl -n keycloak logs job/keycloak-config-cli`).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: keycloak-config-cli
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  # Lỗi thì dừng ngay, không thử lại trong Job: lỗi cấu hình chạy lại vẫn lỗi. Sync của app thất bại, Argo CD thử lại theo
+  # syncPolicy.retry (5 lần, backoff tới 3 phút).
+  backoffLimit: 0
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: keycloak-config-cli
+    spec:
+      restartPolicy: Never
+      # Không cần gọi API Kubernetes.
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: keycloak-config-cli
+          # 6.6.0 build với client Keycloak 26.8.1 (bản 26.8 gần nhất có trong ma trận CI của dự án, README mục
+          # "Compatibility with keycloak"). Không dùng 6.5.1 (keycloak.md ghi trước đây): bản đó chỉ test tới 26.5.5, và
+          # Keycloak 26.6.4+ trả 403 khi công cụ cập nhật role realm-management, 6.6.0 mới bỏ qua các role này
+          # (CHANGELOG 6.6.0). Ghim digest của image index (amd64, arm64); image chạy user 65534.
+          # NÂNG CẤP: chọn tag <cli>-<keycloak> khớp major.minor Keycloak, đổi KEYCLOAK_VERSION bên dưới cùng commit.
+          image: docker.io/adorsys/keycloak-config-cli:6.6.0-26.8.1@sha256:1fafe0823820981c5d33d0e7682a27a817f4a178ab6933387a5c2fca366f92f2
+          env:
+            # Đi thẳng Service trong cụm: admin API không mở qua edge. NetworkPolicy của Keycloak cho pod cùng namespace
+            # vào cổng 8080 (infra/keycloak/keycloak.yaml).
+            - name: KEYCLOAK_URL
+              value: http://keycloak-service:8080
+            - name: KEYCLOAK_AVAILABILITYCHECK_ENABLED
+              value: "true"
+            - name: KEYCLOAK_AVAILABILITYCHECK_TIMEOUT
+              value: 120s
+            # Đăng nhập bằng service account của client keycloak-config-cli trong realm master. Client này chỉ có role
+            # của client commerce-hub-realm (quản trị đúng realm commerce-hub), tạo một lần bằng
+            # scripts/bootstrap-keycloak-config-cli.sh (runbook keycloak-admin.md).
+            - name: KEYCLOAK_LOGINREALM
+              value: master
+            - name: KEYCLOAK_GRANTTYPE
+              value: client_credentials
+            - name: KEYCLOAK_CLIENTID
+              value: keycloak-config-cli
+            - name: KEYCLOAK_CLIENTSECRET
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-config-cli
+                  key: KEYCLOAK_CLIENTSECRET
+            # /admin/serverinfo chỉ trả phiên bản khi người gọi có manage-realm trên realm master
+            # (ServerInfoAdminResource.java 26.8.2); client trên không có. Nên bỏ bước đọc phiên bản và khai thẳng.
+            # NÂNG CẤP Keycloak: đổi cùng commit với spec.image của CR (keycloak.yaml).
+            - name: KEYCLOAK_SKIPSERVERINFO
+              value: "true"
+            - name: KEYCLOAK_VERSION
+              value: 26.8.2
+            - name: IMPORT_FILES_LOCATIONS
+              value: file:/config/*
+            # Tắt cache: bật (mặc định) thì công cụ lưu checksum của file vào realm và BỎ QUA lần chạy khi file không đổi,
+            # nên sửa tay trên Admin Console không bao giờ bị ghi đè (story 28). Tắt thì mỗi lần chạy so từng tài nguyên
+            # với server và chỉ gửi phần khác.
+            - name: IMPORT_CACHE_ENABLED
+              value: "false"
+            # Remote state (mặc định bật, ghi ra cho rõ): chỉ xóa tài nguyên do công cụ tạo; state lưu trong attribute
+            # của realm.
+            - name: IMPORT_REMOTESTATE_ENABLED
+              value: "true"
+            # Bật $(env:X) trong file realm; biến thiếu là lỗi (mặc định undefined-is-error=true).
+            - name: IMPORT_VARSUBSTITUTION_ENABLED
+              value: "true"
+            - name: IMPORT_VALIDATE
+              value: "true"
+          envFrom:
+            # Secret được thay vào file realm: SMOKE_TEST_CLIENT_SECRET.
+            - secretRef:
+                name: realm-commerce-hub
+          resources:
+            # Đo ngày 2026-11-27 (docs/experiments/2026-11-g0-11-realm-as-code.md).
+            requests:
+              cpu: 100m
+              memory: 384Mi
+            limits:
+              memory: 384Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: realm
+              mountPath: /config
+              readOnly: true
+      volumes:
+        - name: realm
+          configMap:
+            # Tên có hash do configMapGenerator sinh (kustomization.yaml); kustomize tự viết lại tên ở đây.
+            name: realm-commerce-hub

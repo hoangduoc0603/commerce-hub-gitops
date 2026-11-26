@@ -11,6 +11,13 @@ resources:
   - keycloak.yaml
   # Route công khai qua Gateway edge (G0-10 bước 5).
   - httproute.yaml
-  # Realm dạng code (G0-11): secret cho Job keycloak-config-cli và client smoke-test.
+  # Realm dạng code (G0-11): secret cho Job keycloak-config-cli (hook PostSync, chạy sau khi CR Keycloak Ready).
   - keycloak-config-cli.sealedsecret.yaml
   - realm-commerce-hub.sealedsecret.yaml
+  - keycloak-config-cli.yaml
+configMapGenerator:
+  # File realm cho Job keycloak-config-cli. Hậu tố hash: sửa file realm là đổi tên ConfigMap, app OutOfSync, auto-sync
+  # chạy lại Job. ConfigMap cũ bị prune.
+  - name: realm-commerce-hub
+    files:
+      - realm/commerce-hub.yaml
