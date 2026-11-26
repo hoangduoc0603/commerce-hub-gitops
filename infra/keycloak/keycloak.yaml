@@ -40,6 +40,13 @@ spec:
     # URL đầy đủ: mọi URL Keycloak sinh cho trình duyệt (kể cả iss của token) là https://auth.lab.internal, không đọc từ
     # header của request. https vì client chỉ thấy edge (kết thúc TLS), dù Keycloak nghe HTTP.
     hostname: https://auth.lab.internal
+    # Admin Console chỉ vào bằng `kubectl port-forward svc/keycloak-service 8180:8080` (hostname kc-admin.: Hoãn tới G7).
+    # Thiếu dòng này thì /admin/ chuyển hướng về https://auth.lab.internal/admin/… (đo 2026-11-26), đường bị edge chặn.
+    # Chưa đủ một mình: trang đăng nhập của Admin Console theo URL FRONTEND, nên realm master còn có attribute
+    # frontendUrl=http://localhost:8180 (đặt tay bằng kcadm, docs/runbooks/keycloak-admin.md).
+    # 8180 thay vì 8080: Spring Boot trên Mac (hello bootTestRun) giữ 8080. Đổi cổng thì đổi cả frontendUrl của master
+    # và lệnh trong runbook.
+    admin: http://localhost:8180
     # Hai dòng dưới là mặc định, ghi ra để đọc file là thấy chính sách (keycloak.md).
     strict: true
     backchannelDynamic: false
