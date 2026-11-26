@@ -88,6 +88,23 @@ spec:
     # 2026-11-27 event ghi 6.6.6.6).
     - name: proxy-trusted-addresses
       value: 10.244.0.0/16
+    # Cổng 9000 (management): /metrics. Option lúc build: với startOptimized false, start tự build lại (G1 chuyển vào
+    # Containerfile của image tùy biến). health-enabled operator luôn bật (Constants.DEFAULT_DIST_CONFIG_LIST).
+    # Chuẩn: keycloak.md mục "Giám sát". ServiceMonitor và giới hạn 9000 cho namespace observability: ticket 13.
+    - name: metrics-enabled
+      value: "true"
+    # keycloak_user_events_total{realm,event,error}: đăng nhập, đăng nhập sai, refresh… Tag mặc định chỉ realm (thêm
+    # clientId/idp làm tăng số series). Feature user-event-metrics bật sẵn (Profile.java 26.8.2: Type.DEFAULT).
+    - name: event-metrics-user-enabled
+      value: "true"
+    # Histogram http_server_requests_seconds để tính p95/p99 (mặc định chỉ có count và sum).
+    - name: http-metrics-histograms-enabled
+      value: "true"
+    # Quá tải thì 503 ngay thay vì xếp hàng vô hạn (mặc định không giới hạn; production guide). 100 ≈ 7 s chờ ở 1 vCPU
+    # (sizing: ~15 đăng nhập mật khẩu/s/vCPU), dưới timeout thường gặp của client. Giá trị khởi đầu, chốt bằng k6 (bảng
+    # "Tài nguyên" của keycloak.md).
+    - name: http-max-queued-requests
+      value: "100"
 
   # Cửa vào là HTTPRoute trên Gateway edge (bước 5), không phải Ingress do operator tạo.
   ingress:
