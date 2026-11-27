@@ -12,10 +12,6 @@ image:
 # Lab chạy 1 replica cho mọi service (ADR-0004).
 replicaCount: 1
 
-# TẠM (G0-29 bước 6b): tắt truststore để kiểm lỗi tải JWKS ra 503. Gỡ khối này ngay sau khi đo.
-trust:
-  enabled: false
-
 resources:
   requests:
     cpu: 250m
