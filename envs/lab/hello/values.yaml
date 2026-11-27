@@ -12,6 +12,11 @@ image:
 # Lab chạy 1 replica cho mọi service (ADR-0004).
 replicaCount: 1
 
+# TẠM (G0-29 bước 6): tắt truststore để thấy lỗi PKIX khi tải JWKS (tiêu chí 3). Gỡ khối này ngay sau khi đo.
+# DB không ảnh hưởng: sslmode=require mã hóa nhưng không kiểm chứng chỉ, nên không cần truststore.
+trust:
+  enabled: false
+
 resources:
   requests:
     cpu: 250m
