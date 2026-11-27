@@ -27,7 +27,6 @@ env:
   # Runtime nối qua Pooler PgBouncer transaction (pg-main-pooler-rw), role hello_app chỉ có DML (G0-08, G0-26).
   # sslmode=require: mã hóa, KHÔNG kiểm chứng chỉ server; lệch chuẩn có chủ đích, verify-full ở G7 (ticket 27 Q4).
   SPRING_DATASOURCE_URL: "jdbc:postgresql://pg-main-pooler-rw.postgres.svc:5432/hello?sslmode=require"
-  # ... SPRING_DATASOURCE_URL giữ nguyên ...
   # Resource server (G0-29). Phải có trước khi image có JWT chạy: thiếu thì app dừng lúc khởi động
   # ("required a bean of type JwtDecoder"). Tên biến theo relaxed binding của Boot: bỏ dấu "-" (jwk-set-uri → JWKSETURI).
   # issuer: chép đúng trường issuer của discovery; JwtIssuerValidator so chuỗi chính xác, thừa "/" cuối là mọi token 401.
