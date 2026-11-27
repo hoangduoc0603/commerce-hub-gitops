@@ -1,0 +1,97 @@
+# kube-prometheus-stack 94.1.0: Prometheus Operator v0.95.2, Prometheus, Alertmanager, kube-state-metrics, node-exporter,
+# Grafana. Ticket G0-13. Chuẩn: docs/standards/observability.md mục "Collector và backend", gitops-argocd.md.
+# Ngân sách RAM: ticket kiến trúc 04, ADR-0004.
+# Docs: https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack
+#
+# - Wave 6: sau sealed-secrets (1), cert-manager (3, Certificate của webhook), edge (5, HTTPRoute Grafana); trước
+#   keycloak (8) để CRD ServiceMonitor có sẵn khi Keycloak Operator reconcile (G0-13 bước 7).
+# - ServerSideApply=true: CRD prometheuses ~840 KiB, vượt giới hạn 262 144 byte của annotation last-applied-configuration
+#   khi apply client-side (README chart, mục "Argo CD").
+# - Chart OCI trên ghcr.io, repoURL không có tiền tố oci:// (Argo CD coi repoURL không scheme là Helm OCI), như
+#   cert-manager.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-stack
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  sources:
+    # NÂNG CẤP: đổi cùng commit targetRevision, các digest image dưới đây và CRD vendor trong
+    # infra/kube-prometheus-stack/upstream/ (theo appVersion = tag operator); đọc mục "Upgrading" của README chart
+    # (major nào cũng có thể đổi giá trị mặc định) trước khi push.
+    # Digest gói chart (OCI manifest): sha256 ad187276d823edb8f3655a3e538f311b9fe76d9fba008e8f0fa195dce18242e0
+    - repoURL: ghcr.io/prometheus-community/charts
+      chart: kube-prometheus-stack
+      targetRevision: 94.1.0
+      helm:
+        releaseName: kube-prometheus-stack
+        valuesObject:
+          # CRD đến từ source thứ hai (bản vendor có Prune=false,Delete=false).
+          crds:
+            enabled: false
+          # Bước 1 chỉ bật operator. Bước 2–5 bật dần từng thành phần.
+          defaultRules:
+            create: false
+          prometheus:
+            enabled: false
+          alertmanager:
+            enabled: false
+          grafana:
+            enabled: false
+          kubeStateMetrics:
+            enabled: false
+          nodeExporter:
+            enabled: false
+          # ServiceMonitor cho kubelet, apiserver, CoreDNS, control plane: bước 2.
+          kubernetesServiceMonitors:
+            enabled: false
+          prometheusOperator:
+            # Image index đa kiến trúc ghim digest (docs/standards/helm-chart.md). Trường sha chỉ nhận phần hex: template
+            # tự ghép "<repo>:<tag>@sha256:<sha>".
+            image:
+              sha: 7986c2afa118c9dea07d01c5e1a29555824582e92f6ee8607591d1a7178acf29
+            # Sidecar reload cấu hình trong pod Prometheus/Alertmanager; operator truyền image này bằng cờ.
+            prometheusConfigReloader:
+              image:
+                sha: cc74ddedad4ab1c49446971f6d51302ad4303d8660a2018af925c7f62c114304
+            # Webhook kiểm PrometheusRule/AlertmanagerConfig dùng chứng chỉ của cert-manager (CA tự ký riêng cho webhook,
+            # cainjector điền caBundle). Loại: Job Helm hook mặc định (Argo CD chạy lại mỗi lần sync, như startupapicheck
+            # của cert-manager). failurePolicy mặc định Ignore: operator sập không chặn apply rule.
+            # https://cert-manager.io/docs/concepts/ca-injector/
+            admissionWebhooks:
+              certManager:
+                enabled: true
+            # ADR-0004: prometheus-operator 128 Mi, request = limit, không CPU limit. Chart để trống resources.
+            resources:
+              requests:
+                cpu: 10m
+                memory: 128Mi
+              limits:
+                memory: 128Mi
+            # env là map (chart đặt sẵn GOGC: "30", được giữ khi gộp). GOMEMLIMIT ~90% limit để GC biết trần.
+            env:
+              GOMEMLIMIT: 115MiB
+    # Namespace observability, CRD vendor; các bước sau thêm SealedSecret, HTTPRoute, rule, dashboard.
+    - repoURL: https://github.com/hoangduoc0603/commerce-hub-gitops.git
+      targetRevision: main
+      path: infra/kube-prometheus-stack
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

@@ -1,0 +1,19 @@
+# Namespace của toàn bộ thành phần quan sát (G0-13, G0-14): Prometheus Operator, Prometheus, Alertmanager,
+# kube-state-metrics, node-exporter, Grafana; sau này Loki, Tempo, Collector.
+# Do platform tạo, app không dùng CreateNamespace.
+# - Pod Security privileged (lệch có chủ đích so với restricted của edge, cert-manager, keycloak): node-exporter cần
+#   hostNetwork, hostPID và hostPath / để đọc /proc, /sys của node; cả ba vượt mức baseline. Loại: tách node-exporter
+#   ra namespace riêng (ticket ghi mọi thành phần ở observability; thêm một namespace chỉ cho một DaemonSet).
+#   https://kubernetes.io/docs/concepts/security/pod-security-standards/
+# - edge.lab.internal/routes: cho HTTPRoute grafana.lab.internal gắn vào listener https của Gateway edge (bước 5).
+# - Prune=false: commit lỡ không xóa namespace (xóa là mất PVC dữ liệu Prometheus).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/enforce-version: v1.37
+    edge.lab.internal/routes: "true"
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
