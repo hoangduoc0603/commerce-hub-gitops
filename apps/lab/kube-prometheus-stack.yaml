@@ -127,16 +127,16 @@ spec:
                 reporting_enabled: false
                 check_for_updates: false
                 check_for_plugin_updates: false
-            # Ngân sách ticket 04: "Grafana và sidecar 320 Mi" chia 224 + 2 × 48. Request = limit, không CPU limit.
-            # Grafana viết bằng Go: GOMEMLIMIT ~90% limit.
+            # TẠM (G0-13 bước 5): 224 + 2 × 48 Mi (ngân sách ticket 04) bị OOMKilled cả ba container lúc khởi động. Nâng
+            # để đo mức thật, rồi chốt lại trong commit sau.
             resources:
               requests:
                 cpu: 50m
-                memory: 224Mi
+                memory: 512Mi
               limits:
-                memory: 224Mi
+                memory: 512Mi
             env:
-              GOMEMLIMIT: 200MiB
+              GOMEMLIMIT: 460MiB
             # Hai sidecar (dashboards, datasources) dùng chung image và resources. k8s-sidecar là Python.
             sidecar:
               image:
@@ -144,9 +144,9 @@ spec:
               resources:
                 requests:
                   cpu: 10m
-                  memory: 48Mi
+                  memory: 128Mi
                 limits:
-                  memory: 48Mi
+                  memory: 128Mi
           # kube-state-metrics v2.20.0: trạng thái object K8s (kube_pod_info, kube_deployment_status_*, restart, OOMKilled).
           # Metric USE của pod (observability.md mục "RED, USE").
           kubeStateMetrics:
