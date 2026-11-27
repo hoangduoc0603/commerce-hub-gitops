@@ -6,15 +6,23 @@
 # Sửa tay trên Admin Console không làm app OutOfSync; lần sync kế tiếp (đổi Git, hoặc bấm Sync) sẽ ghi đè.
 # Chạy lại bằng tay: `argocd app sync keycloak` (hoặc nút Sync), không cần đổi Git.
 #
-# BeforeHookCreation: Job cũ chỉ bị xóa khi sync kế tiếp tạo Job mới, nên log lần chạy gần nhất luôn đọc được
-# (`kubectl -n keycloak logs job/keycloak-config-cli`).
+# Xóa hook: HookSucceeded,BeforeHookCreation. Job thành công bị xóa ngay sau khi Argo CD đọc xong kết quả; Job lỗi được giữ
+# để đọc log (`kubectl -n keycloak logs job/keycloak-config-cli`) và bị xóa khi sync kế tiếp tạo Job mới.
+# Vì sao không chỉ BeforeHookCreation (đã dùng, đo 2026-11-27): Job cũ cùng tên còn tới lần sync sau, và Argo CD 3.6.1 hai
+# lần đọc trạng thái của Job CŨ thay cho Job vừa tạo: một lần báo Failed khi Job mới thành công, một lần báo Succeeded 6 s
+# trước khi Job mới chạy xong (log controller: "job.batch/keycloak-config-cli created" rồi "Reached expected number of
+# succeeded pods" cùng giây). Không dùng generateName (docs Argo CD gợi ý): kustomize 5.8 bắt buộc metadata.name. Không
+# dùng ttlSecondsAfterFinished: docs Argo CD cảnh báo sync có thể treo chờ hook đã bị xóa. Log của lần chạy thành công
+# chỉ còn trong Loki (ticket 14).
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: keycloak-config-cli
+  labels:
+    app.kubernetes.io/name: keycloak-config-cli
   annotations:
     argocd.argoproj.io/hook: PostSync
-    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded,BeforeHookCreation
 spec:
   # Lỗi thì dừng ngay, không thử lại trong Job: lỗi cấu hình chạy lại vẫn lỗi. Sync của app thất bại, Argo CD thử lại theo
   # syncPolicy.retry (5 lần, backoff tới 3 phút).
