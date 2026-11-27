@@ -85,10 +85,37 @@ spec:
             enabled: false
           grafana:
             enabled: false
+          # kube-state-metrics v2.20.0: trạng thái object K8s (kube_pod_info, kube_deployment_status_*, restart, OOMKilled).
+          # Metric USE của pod (observability.md mục "RED, USE").
           kubeStateMetrics:
-            enabled: false
+            enabled: true
+          kube-state-metrics:
+            image:
+              # Subchart này ghép "<repo>:<tag>@<sha>": sha GỒM tiền tố sha256: (khác prometheusOperator và Prometheus).
+              sha: sha256:42cfe3723a5f058171c627537fb57a3ea0f26e4380fa18555a95cb1a1b4cfc5b
+            # ADR-0004: 128 Mi, request = limit, không CPU limit. Chart để trống resources.
+            resources:
+              requests:
+                cpu: 10m
+                memory: 128Mi
+              limits:
+                memory: 128Mi
+          # node-exporter v1.13.1 (DaemonSet, mỗi node một pod): CPU, RAM, đĩa, mạng của node. Cần hostNetwork, hostPID,
+          # hostPath / (mặc định chart), vì vậy namespace observability ở PSA privileged.
           nodeExporter:
-            enabled: false
+            enabled: true
+          prometheus-node-exporter:
+            image:
+              # kube-prometheus-stack đặt image.distroless: true (tag v1.13.1-distroless): digest phải là của bản
+              # distroless. Subchart dùng image.digest (gồm tiền tố sha256:), image.sha bị cấm (fail khi render).
+              digest: sha256:dbc46b5381ae47c5634a6ad16d7b4862191979b0ba4f4cfbdee85e5aa2fcd1e3
+            # ADR-0004: 3 × 48 Mi, request = limit, không CPU limit.
+            resources:
+              requests:
+                cpu: 10m
+                memory: 48Mi
+              limits:
+                memory: 48Mi
           # ServiceMonitor của chart cho kubelet (cAdvisor, probes), apiserver, CoreDNS.
           kubernetesServiceMonitors:
             enabled: true
