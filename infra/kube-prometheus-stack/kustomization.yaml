@@ -7,6 +7,9 @@ resources:
   - namespace.yaml
   # Recording rule và alert ngân sách series (G0-13 bước 4).
   - prometheusrule-series-budget.yaml
+  # Grafana (G0-13 bước 5): mật khẩu admin (wave -1) và route grafana.lab.internal.
+  - grafana-admin.sealedsecret.yaml
+  - grafana-httproute.yaml
   # Bản sao nguyên văn example/prometheus-operator-crd/ của prometheus-operator v0.95.2 (appVersion của chart 94.1.0;
   # giống hệt charts/crds/crds/ của chart trừ dòng comment đầu), tải 2026-11-27 từ
   # https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.95.2/example/prometheus-operator-crd/

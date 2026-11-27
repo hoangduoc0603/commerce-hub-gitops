@@ -1,0 +1,30 @@
+# Grafana qua Gateway edge: https://grafana.lab.internal (G0-13 bước 5). Chuẩn: docs/standards/cluster-entry.md,
+# ADR-0013. Namespace observability mang nhãn edge.lab.internal/routes (namespace.yaml).
+# - Chỉ Grafana có route. Prometheus và Alertmanager cố ý KHÔNG có route (tiêu chí của ticket): không có đăng nhập, ai
+#   vào được là đọc mọi metric và tắt được alert. Vào bằng kubectl port-forward. Grafana đọc chúng qua Service trong cụm.
+# - Cổng 80 của Service kube-prometheus-stack-grafana (→ 3000, HTTP). edge kết thúc TLS.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: grafana
+  namespace: observability
+spec:
+  parentRefs:
+    - name: edge
+      namespace: edge
+      # Chỉ listener https; listener http (80) chỉ nhận route trong namespace edge (chuyển sang https).
+      sectionName: https
+  hostnames:
+    - grafana.lab.internal
+  rules:
+    - backendRefs:
+        - name: kube-prometheus-stack-grafana
+          port: 80
+      filters:
+        # HSTS như route argocd, keycloak: trình duyệt tự đổi sang https từ lần thứ hai, không gửi cookie phiên
+        # grafana_session qua http:// trước khi nhận 301. 1 năm, không includeSubDomains.
+        - type: ResponseHeaderModifier
+          responseHeaderModifier:
+            set:
+              - name: Strict-Transport-Security
+                value: max-age=31536000

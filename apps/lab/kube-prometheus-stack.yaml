@@ -100,8 +100,53 @@ spec:
                   memory: 128Mi
                 limits:
                   memory: 128Mi
+          # Grafana 13.3.2 (subchart grafana-community 14.6.1). Datasource Prometheus, Alertmanager và dashboard mặc định của
+          # kube-prometheus là ConfigMap do chart sinh ra (dạng code); sidecar k8s-sidecar nạp chúng vào Grafana.
+          # Không PVC: DB SQLite tạo lại mỗi lần khởi động, nên mọi thứ phải đến từ Git (tiêu chí "sửa trên UI bị ghi đè").
           grafana:
-            enabled: false
+            enabled: true
+            image:
+              # Tag mặc định "<appVersion>-distroless"; sha chỉ phần hex, của bản distroless.
+              sha: d9425e704fa9dff189966b827fbc9b63befc5b443999c7b82193f1b1a73c74f7
+            # Tài khoản admin cục bộ (D4, SSO Hoãn tới G7). Secret sinh từ SealedSecret grafana-admin
+            # (infra/kube-prometheus-stack/), key admin-user và admin-password là mặc định của chart.
+            admin:
+              existingSecret: grafana-admin
+            # Pod chạy test của Helm (hook test): Argo CD không chạy, tắt để không kéo thêm image.
+            testFramework:
+              enabled: false
+            grafana.ini:
+              server:
+                # URL công khai qua edge: link trong alert, redirect sau đăng nhập dùng URL này.
+                root_url: https://grafana.lab.internal
+              security:
+                # Cookie phiên chỉ gửi qua HTTPS (người dùng luôn vào qua edge, kèm HSTS trên route).
+                cookie_secure: true
+              # Không gửi số liệu sử dụng hay hỏi bản mới ra Internet.
+              analytics:
+                reporting_enabled: false
+                check_for_updates: false
+                check_for_plugin_updates: false
+            # Ngân sách ticket 04: "Grafana và sidecar 320 Mi" chia 224 + 2 × 48. Request = limit, không CPU limit.
+            # Grafana viết bằng Go: GOMEMLIMIT ~90% limit.
+            resources:
+              requests:
+                cpu: 50m
+                memory: 224Mi
+              limits:
+                memory: 224Mi
+            env:
+              GOMEMLIMIT: 200MiB
+            # Hai sidecar (dashboards, datasources) dùng chung image và resources. k8s-sidecar là Python.
+            sidecar:
+              image:
+                sha: 52d311dcedd587421a236c4d6c621f05614c40a51386e955e0699dca97ec0880
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 48Mi
+                limits:
+                  memory: 48Mi
           # kube-state-metrics v2.20.0: trạng thái object K8s (kube_pod_info, kube_deployment_status_*, restart, OOMKilled).
           # Metric USE của pod (observability.md mục "RED, USE").
           kubeStateMetrics:
