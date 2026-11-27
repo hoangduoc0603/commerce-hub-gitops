@@ -6,8 +6,8 @@
 # G0-29: issuer và JWKS của realm commerce-hub (env), thêm TRƯỚC khi merge image có resource server.
 image:
   repository: ghcr.io/hoangduoc0603/commerce-hub-hello
-  digest: sha256:11fa29cb809a2f0188c804de443c3a00d9c5ef87c61ba94cd40ee813c058e1e8
-  tag: "2745b06f4a4f5b18b8d8ffe87cfbd480eb998498"
+  digest: sha256:6f250349861fb0d88a91974bda040a5aa38fc8f91f08d0a912cccdec05b2e318
+  tag: "405c2ef04c157a5a2ebcb54121b7c74556328f7e"
 
 # Lab chạy 1 replica cho mọi service (ADR-0004).
 replicaCount: 1
