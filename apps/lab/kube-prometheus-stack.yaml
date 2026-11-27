@@ -37,8 +37,50 @@ spec:
           # Bước 1 chỉ bật operator. Bước 2–5 bật dần từng thành phần.
           defaultRules:
             create: false
+          # Prometheus đơn bản (ADR-0004, observability.md mục "Collector và backend"). Không có route trên edge: chỉ
+          # vào qua `kubectl -n observability port-forward svc/kube-prometheus-stack-prometheus 9090` (chart mặc định
+          # ingress.enabled: false). Grafana đọc qua Service trong cụm.
           prometheus:
-            enabled: false
+            enabled: true
+            prometheusSpec:
+              image:
+                sha: 9764044e09eb2c9e1abdb12d0f0188d4efb7384b0262d3c080f0fc59045c89ba
+              # Chọn MỌI ServiceMonitor/PodMonitor/PrometheusRule/Probe/ScrapeConfig trong mọi namespace. Mặc định chart
+              # (`true`) chỉ chọn object mang nhãn release=kube-prometheus-stack, nên ServiceMonitor do Keycloak Operator
+              # hay chart app sinh ra bị bỏ qua im lặng (không lỗi, chỉ không có target). Namespace selector để trống =
+              # mọi namespace. Ranh giới: project commerce không tạo được Prometheus, chỉ khai ServiceMonitor của mình.
+              serviceMonitorSelectorNilUsesHelmValues: false
+              podMonitorSelectorNilUsesHelmValues: false
+              ruleSelectorNilUsesHelmValues: false
+              probeSelectorNilUsesHelmValues: false
+              scrapeConfigSelectorNilUsesHelmValues: false
+              # N14 không nói metric; observability.md: 15 ngày. retentionSize chặn trước khi PVC đầy (local-path không
+              # ép dung lượng, nên đây là trần thật). Xóa theo khối 2 giờ, cái nào tới trước.
+              retention: 15d
+              retentionSize: 8GB
+              # Exemplar: nhảy từ histogram sang trace (Tempo, ticket 14). Spring Boot tự gắn exemplar khi có tracing.
+              # https://prometheus.io/docs/prometheus/latest/feature_flags/#exemplars-storage
+              enableFeatures:
+                - exemplar-storage
+              # ADR-0004: 1 Gi, request = limit, không CPU limit. Prometheus 3 bật sẵn auto-gomemlimit (GOMEMLIMIT = 90%
+              # limit cgroup), nên limit là bắt buộc để GC biết trần.
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 1Gi
+                limits:
+                  memory: 1Gi
+              # Một PVC local-path: không HA, node chứa nó chết là mất số liệu trong lúc đó (lệch chuẩn có chủ đích,
+              # observability.md mục "Lệch chuẩn có chủ đích"). 10Gi > retentionSize 8GB để còn chỗ cho WAL.
+              storageSpec:
+                volumeClaimTemplate:
+                  spec:
+                    storageClassName: local-path
+                    accessModes:
+                      - ReadWriteOnce
+                    resources:
+                      requests:
+                        storage: 10Gi
           alertmanager:
             enabled: false
           grafana:
@@ -47,8 +89,21 @@ spec:
             enabled: false
           nodeExporter:
             enabled: false
-          # ServiceMonitor cho kubelet, apiserver, CoreDNS, control plane: bước 2.
+          # ServiceMonitor của chart cho kubelet (cAdvisor, probes), apiserver, CoreDNS.
           kubernetesServiceMonitors:
+            enabled: true
+          # Lệch chuẩn có chủ đích, Hoãn tới G7 (G0-13 Q1): kubeadm cho bốn thành phần này nghe metric ở 127.0.0.1
+          # (etcd --listen-metrics-urls=http://127.0.0.1:2381; scheduler, controller-manager --bind-address mặc định;
+          # kube-proxy metricsBindAddress "" = 127.0.0.1:10249, kiểm 2026-11-27). Prometheus trong pod không với tới:
+          # để bật là 4 target down và alert *Down bắn liên tục. Mở ra phải sửa static pod manifest và ConfigMap
+          # kube-proxy trên node, ngoài GitOps.
+          kubeControllerManager:
+            enabled: false
+          kubeScheduler:
+            enabled: false
+          kubeEtcd:
+            enabled: false
+          kubeProxy:
             enabled: false
           prometheusOperator:
             # Image index đa kiến trúc ghim digest (docs/standards/helm-chart.md). Trường sha chỉ nhận phần hex: template
@@ -59,6 +114,14 @@ spec:
             prometheusConfigReloader:
               image:
                 sha: cc74ddedad4ab1c49446971f6d51302ad4303d8660a2018af925c7f62c114304
+              # Chart mặc định truyền --config-reloader-memory-limit=0 (không limit). Sidecar nhỏ (Go, chỉ watch file và
+              # gọi /-/reload); 32 Mi là ước lượng, ngoài bảng ticket 04 (bảng chưa tính sidecar), đo ở bước 8.
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  memory: 32Mi
             # Webhook kiểm PrometheusRule/AlertmanagerConfig dùng chứng chỉ của cert-manager (CA tự ký riêng cho webhook,
             # cainjector điền caBundle). Loại: Job Helm hook mặc định (Argo CD chạy lại mỗi lần sync, như startupapicheck
             # của cert-manager). failurePolicy mặc định Ignore: operator sập không chặn apply rule.
