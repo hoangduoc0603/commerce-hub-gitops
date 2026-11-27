@@ -75,19 +75,21 @@ $K add-roles -r master --uusername service-account-keycloak-config-cli --cclient
 echo "Role của service account (client commerce-hub-realm):"
 $K get-roles -r master --uusername service-account-keycloak-config-cli --cclientid commerce-hub-realm --fields name --format csv --noquotes --config $C | sort | paste -sd " " -
 
-# 4. Kiểm bằng chính client: đọc được commerce-hub; master bị từ chối vì thiếu quyền (403), không phải vì token sai (401).
+# 4. Kiểm bằng chính client: đọc được commerce-hub; danh sách user của master bị từ chối vì thiếu quyền (403), không phải
+#    vì token sai (401). Không kiểm bằng GET realms/master: endpoint đó trả bản rút gọn (tên realm và vài trường hiển thị)
+#    cho MỌI admin, kể cả admin của realm khác (đo 2026-11-27: 200, 6 khóa; realms/master/users: 403).
 T=/tmp/kcadm-check.cfg
 trap "rm -f $T" EXIT
 # KC_CLI_CLIENT_SECRET (kcadm 26.8.2 đọc biến này) thay cho --secret, để secret không nằm trong tham số lệnh.
 KC_CLI_CLIENT_SECRET="$S" $K config credentials --config $T --server http://localhost:8080 --realm master --client keycloak-config-cli >/dev/null
 R=$($K get realms/commerce-hub --fields realm --format csv --noquotes --config $T)
 echo "realms/commerce-hub: $R"
-if OUT=$($K get realms/master --fields realm --config $T 2>&1); then
-  echo "LỖI: client đọc được realm master" >&2; exit 1
+if OUT=$($K get users -r master --limit 1 --config $T 2>&1); then
+  echo "LỖI: client liệt kê được user của realm master" >&2; exit 1
 elif [[ "$OUT" == *403* ]]; then
-  echo "realms/master: 403 (đúng)"
+  echo "realms/master/users: 403 (đúng)"
 else
-  echo "LỖI không mong đợi khi đọc master: $OUT" >&2; exit 1
+  echo "LỖI không mong đợi khi đọc user của master: $OUT" >&2; exit 1
 fi
 '
 echo "Xong. Chạy Job: argocd app sync keycloak (hoặc nút Sync trên Argo CD)."
