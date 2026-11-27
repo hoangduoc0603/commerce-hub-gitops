@@ -106,10 +106,13 @@ clients:
     attributes:
       # Không cấp refresh token cho client credentials (tùy chọn deprecated, mặc định đã tắt; ghi ra để thấy chính sách).
       client_credentials.use_refresh_token: "false"
-    # Chỉ scope basic (sub, auth_time). Bỏ profile, email, roles: service account không có hồ sơ, và scope roles thêm
-    # aud "account" qua mapper audience resolve. Kết quả: aud chỉ có commerce-hub-api.
+    # basic (sub, auth_time) và service_account (client_id; Keycloak tự gắn cho client có service account, không khai thì
+    # mỗi lần chạy công cụ gỡ ra rồi Keycloak gắn lại: đo 2026-11-27, 1 admin event DELETE CLIENT_SCOPE_CLIENT_MAPPING).
+    # Bỏ profile, email, roles: service account không có hồ sơ, và scope roles thêm aud "account" qua mapper audience
+    # resolve. Kết quả: aud chỉ có commerce-hub-api.
     defaultClientScopes:
       - basic
+      - service_account
     optionalClientScopes: []
     protocolMappers:
       # Resource server kiểm aud = commerce-hub-api (keycloak.md mục "Client OIDC", ticket 29). Không có aud thì token
