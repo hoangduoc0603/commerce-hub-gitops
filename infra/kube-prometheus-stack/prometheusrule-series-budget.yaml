@@ -1,0 +1,37 @@
+# Ngân sách cardinality (G0-13 bước 4). Chuẩn: docs/standards/observability.md mục "Metric: tên, nhãn, cardinality":
+# tổng prometheus_tsdb_head_series dưới 200 000 (giả định của lab, đo lại ở bước 8 và ticket 34).
+# Prometheus chọn mọi PrometheusRule (ruleSelectorNilUsesHelmValues: false), nên không cần nhãn release.
+# Webhook của operator kiểm cú pháp PromQL lúc apply: rule sai bị từ chối thay vì làm Prometheus bỏ cả nhóm.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: series-budget
+  namespace: observability
+spec:
+  groups:
+    - name: series-budget
+      rules:
+        # Recording rule: tính sẵn mỗi chu kỳ đánh giá (30 s mặc định của chart) và lưu thành series mới, để dashboard và
+        # alert đọc một series nhỏ thay vì cộng lại mọi target mỗi lần mở. Tên theo quy ước level:metric:operations
+        # (https://prometheus.io/docs/practices/rules/#naming-and-aggregation).
+        # scrape_samples_post_metric_relabeling: số sample một target trả về sau relabel, xấp xỉ số series nó đóng góp
+        # vào head. Cộng theo job để biết exporter hay service nào chiếm ngân sách.
+        - record: job:scrape_samples_post_metric_relabeling:sum
+          expr: sum by (job) (scrape_samples_post_metric_relabeling)
+        # Cộng theo namespace: một service G1 (một namespace) vượt 5 000 series mỗi pod thì lộ ra ở đây.
+        - record: namespace:scrape_samples_post_metric_relabeling:sum
+          expr: sum by (namespace) (scrape_samples_post_metric_relabeling)
+        # Alert ngân sách tổng. for: 30m để không bắn vì đột biến ngắn (pod rollout tạo series mới trong lúc series cũ
+        # chưa hết hạn khỏi head, khoảng 1–3 giờ). Chưa có alert 5 000 series mỗi pod service: chờ ServiceMonitor đầu tiên
+        # của service (ticket 30), khi đó mới biết nhãn nào tách được pod service khỏi pod hạ tầng.
+        - alert: PrometheusSeriesBudgetExceeded
+          expr: prometheus_tsdb_head_series{job="kube-prometheus-stack-prometheus"} > 200000
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: Prometheus vượt ngân sách 200 000 series.
+            description: >-
+              Head của {{ $labels.pod }} có {{ $value | humanize }} series, vượt ngân sách 200 000 của lab.
+              Tìm metric hay nhãn gây ra trước khi tăng RAM.
+            runbook_url: https://github.com/hoangduoc0603/commerce-hub-docs/blob/main/runbooks/series-budget.md

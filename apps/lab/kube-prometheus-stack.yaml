@@ -34,9 +34,11 @@ spec:
           # CRD đến từ source thứ hai (bản vendor có Prune=false,Delete=false).
           crds:
             enabled: false
-          # Bước 1 chỉ bật operator. Bước 2–5 bật dần từng thành phần.
+          # Rule và alert mặc định của kube-prometheus (node, kubelet, workload, Prometheus, Alertmanager). Nhóm của etcd,
+          # scheduler, controller-manager, kube-proxy tự tắt theo kubeEtcd/kubeScheduler/... .enabled bên dưới. Rule tự
+          # viết (ngân sách series) nằm trong infra/kube-prometheus-stack/prometheusrule-series-budget.yaml.
           defaultRules:
-            create: false
+            create: true
           # Prometheus đơn bản (ADR-0004, observability.md mục "Collector và backend"). Không có route trên edge: chỉ
           # vào qua `kubectl -n observability port-forward svc/kube-prometheus-stack-prometheus 9090` (chart mặc định
           # ingress.enabled: false). Grafana đọc qua Service trong cụm.
@@ -81,8 +83,23 @@ spec:
                     resources:
                       requests:
                         storage: 10Gi
+          # Alertmanager đơn bản, chưa gửi alert đi đâu: config mặc định của chart route mọi alert về receiver 'null'
+          # (receiver thật, ví dụ email qua Mailpit hay Slack: G7 cùng alert SLO). Không route trên edge: chỉ
+          # `kubectl -n observability port-forward svc/kube-prometheus-stack-alertmanager 9093`. Không PVC: silence mất
+          # khi pod khởi động lại (chấp nhận ở lab; chưa có ai nhận alert để silence).
           alertmanager:
-            enabled: false
+            enabled: true
+            alertmanagerSpec:
+              image:
+                # Trường sha chỉ nhận phần hex (template ghép "@sha256:<sha>").
+                sha: 03d4e362b9948eee910802ddac55f9175b320862a2de1fdef5206c3213875a09
+              # ADR-0004: 128 Mi, request = limit, không CPU limit.
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 128Mi
+                limits:
+                  memory: 128Mi
           grafana:
             enabled: false
           # kube-state-metrics v2.20.0: trạng thái object K8s (kube_pod_info, kube_deployment_status_*, restart, OOMKilled).
