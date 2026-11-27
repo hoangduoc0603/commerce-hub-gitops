@@ -3,6 +3,7 @@
 # G0-22: image.digest và image.tag ghi tay (image của commit 16efc28, ticket G0-23). Từ G0-24, job update-gitops của hello
 # sửa hai dòng này; đừng đổi cấu trúc hai key mà job đó tìm.
 # G0-27: thêm DB (pg-main): bản sao mật khẩu hello_app, hello_migrator dạng SealedSecret, runtime qua Pooler, Job migrate.
+# G0-29: issuer và JWKS của realm commerce-hub (env), thêm TRƯỚC khi merge image có resource server.
 image:
   repository: ghcr.io/hoangduoc0603/commerce-hub-hello
   digest: sha256:11fa29cb809a2f0188c804de443c3a00d9c5ef87c61ba94cd40ee813c058e1e8
@@ -26,6 +27,14 @@ env:
   # Runtime nối qua Pooler PgBouncer transaction (pg-main-pooler-rw), role hello_app chỉ có DML (G0-08, G0-26).
   # sslmode=require: mã hóa, KHÔNG kiểm chứng chỉ server; lệch chuẩn có chủ đích, verify-full ở G7 (ticket 27 Q4).
   SPRING_DATASOURCE_URL: "jdbc:postgresql://pg-main-pooler-rw.postgres.svc:5432/hello?sslmode=require"
+  # ... SPRING_DATASOURCE_URL giữ nguyên ...
+  # Resource server (G0-29). Phải có trước khi image có JWT chạy: thiếu thì app dừng lúc khởi động
+  # ("required a bean of type JwtDecoder"). Tên biến theo relaxed binding của Boot: bỏ dấu "-" (jwk-set-uri → JWKSETURI).
+  # issuer: chép đúng trường issuer của discovery; JwtIssuerValidator so chuỗi chính xác, thừa "/" cuối là mọi token 401.
+  SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI: "https://auth.lab.internal/realms/commerce-hub"
+  # JWKS đi qua Gateway edge bằng HTTPS (truststore của chart), không đi địa chỉ nội bộ http://keycloak-service...:
+  # lệch keycloak.md có chủ đích, lý do ở Q1 ticket G0-29 (tiêu chí PKIX cần HTTPS; khỏi mở NetworkPolicy của Keycloak).
+  SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI: "https://auth.lab.internal/realms/commerce-hub/protocol/openid-connect/certs"
 
 # Ngoại lệ chỉ có ở G0: hello mở qua edge. Từ G1 chỉ seller-web, Keycloak, simulator ra ngoài.
 httpRoute:
