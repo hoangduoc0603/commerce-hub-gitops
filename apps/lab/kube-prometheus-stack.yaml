@@ -140,8 +140,21 @@ spec:
                 memory: 384Mi
             env:
               GOMEMLIMIT: 345MiB
+            # Mặc định kube-prometheus-stack: sidecar dashboard tìm ConfigMap VÀ Secret ở MỌI namespace, chart cấp ClusterRole
+            # get/list/watch configmaps, secrets toàn cụm. Tức pod Grafana đọc được mọi Secret của cụm (mật khẩu DB, khóa
+            # CA...), và sidecar liệt kê hết lúc khởi động nên bị OOMKilled ở 96 Mi (2026-11-27). Thu hẹp: Role trong
+            # observability (rbac.namespaced), chỉ ConfigMap, chỉ namespace observability. Dashboard và datasource của chart
+            # đều là ConfigMap ở đây; dashboard tự viết (bước 6, ticket 30) cũng đặt ở infra/kube-prometheus-stack/.
+            # searchNamespace ghi tên tường minh: null trong valuesObject bị mất khi lưu Application (gitops-argocd.md).
+            rbac:
+              namespaced: true
             # Hai sidecar (dashboards, datasources) dùng chung image và resources. k8s-sidecar là Python.
             sidecar:
+              dashboards:
+                searchNamespace: observability
+                resource: configmap
+              datasources:
+                resource: configmap
               image:
                 sha: 52d311dcedd587421a236c4d6c621f05614c40a51386e955e0699dca97ec0880
               resources:
