@@ -74,6 +74,15 @@ spec:
           cainjector:
             image:
               digest: sha256:083d0e906f8eb44e255fe4ff817ae54e49f9ed82e22f1011bb4e9e4f4b8a641f
+            # Không theo dõi CRD và APIService: mặc định cainjector cache TOÀN BỘ CRD của cụm để tìm annotation
+            # inject-ca-from. 10 CRD của Prometheus Operator (~4,4 MB, G0-13) làm cainjector bị SIGKILL (exit 137) lúc
+            # áp và sau đó chạy sát limit 64 Mi. Cụm không có CRD hay APIService nào cần inject CA (kiểm 2026-11-27);
+            # webhook configuration (cert-manager, trust-manager, kube-prometheus-stack) vẫn được inject. Thêm CRD có
+            # conversion webhook cần CA của cert-manager thì bật lại. `--help` của image v1.21.3: "not required if
+            # cainjector is only used as cert-manager's internal component".
+            extraArgs:
+              - --enable-customresourcedefinitions-injectable=false
+              - --enable-apiservices-injectable=false
             resources:
               requests:
                 cpu: 10m
