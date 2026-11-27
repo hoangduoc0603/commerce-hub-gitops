@@ -127,16 +127,19 @@ spec:
                 reporting_enabled: false
                 check_for_updates: false
                 check_for_plugin_updates: false
-            # TẠM (G0-13 bước 5): 224 + 2 × 48 Mi (ngân sách ticket 04) bị OOMKilled cả ba container lúc khởi động. Nâng
-            # để đo mức thật, rồi chốt lại trong commit sau.
+            # Lệch ngân sách ticket 04 ("Grafana và sidecar 320 Mi"): với 224 + 2 × 48 Mi cả ba container bị OOMKilled ngay
+            # lúc khởi động (2026-11-27). Đo với limit tạm 512/128 Mi: đỉnh Grafana 298 Mi (đăng ký ~20 plugin datasource
+            # lõi), mỗi sidecar 78 Mi (Python). Chốt ~1,25 × đỉnh: 384 + 2 × 96 = 576 Mi (+256 Mi so với ngân sách), ghi
+            # vào bản ghi G0 cho ticket 34. Đỉnh đo theo mẫu 30 s của cAdvisor, có thể bỏ sót đỉnh ngắn lúc khởi động.
+            # Request = limit, không CPU limit. Grafana viết bằng Go: GOMEMLIMIT ~90% limit.
             resources:
               requests:
                 cpu: 50m
-                memory: 512Mi
+                memory: 384Mi
               limits:
-                memory: 512Mi
+                memory: 384Mi
             env:
-              GOMEMLIMIT: 460MiB
+              GOMEMLIMIT: 345MiB
             # Hai sidecar (dashboards, datasources) dùng chung image và resources. k8s-sidecar là Python.
             sidecar:
               image:
@@ -144,9 +147,9 @@ spec:
               resources:
                 requests:
                   cpu: 10m
-                  memory: 128Mi
+                  memory: 96Mi
                 limits:
-                  memory: 128Mi
+                  memory: 96Mi
           # kube-state-metrics v2.20.0: trạng thái object K8s (kube_pod_info, kube_deployment_status_*, restart, OOMKilled).
           # Metric USE của pod (observability.md mục "RED, USE").
           kubeStateMetrics:
@@ -166,6 +169,12 @@ spec:
           # hostPath / (mặc định chart), vì vậy namespace observability ở PSA privileged.
           nodeExporter:
             enabled: true
+            # Cụm chỉ có node Linux: bỏ dashboard "Node Exporter / AIX" và "/ MacOS" mà chart bật sẵn.
+            operatingSystems:
+              aix:
+                enabled: false
+              darwin:
+                enabled: false
           prometheus-node-exporter:
             image:
               # kube-prometheus-stack đặt image.distroless: true (tag v1.13.1-distroless): digest phải là của bản
