@@ -8,7 +8,7 @@ Nguồn sự thật cho Argo CD: hệ thống chạy gì, ở môi trường nà
 | `apps/` | Argo CD `Application` (app-of-apps) |
 | `envs/<môi trường>/<service>/` | Values cho chart, image tag, overlay theo môi trường (ví dụ `envs/local/order/values.yaml`) |
 | `infra/<thành phần>/` | Manifest hạ tầng vendor kèm patch Kustomize, dùng chung giữa môi trường (ví dụ CRD SealedSecret có `Prune=false,Delete=false`) |
-| `scripts/` | Kiểm Secret dạng rõ (`check-no-plain-secrets.sh`), sao lưu khóa sealing (`backup-sealing-key.sh`) |
+| `scripts/` | Kiểm Secret dạng rõ (`check-no-plain-secrets.sh`), sao lưu khóa sealing (`backup-sealing-key.sh`), tạo client `keycloak-config-cli` trong realm `master` (`bootstrap-keycloak-config-cli.sh`) |
 
 CI của từng service chỉ cập nhật image tag ở đây. Sửa replica hay cấu hình thì commit thẳng vào repo này, không cần build lại service.
 
