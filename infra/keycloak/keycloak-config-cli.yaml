@@ -13,7 +13,7 @@
 # trước khi Job mới chạy xong (log controller: "job.batch/keycloak-config-cli created" rồi "Reached expected number of
 # succeeded pods" cùng giây). Không dùng generateName (docs Argo CD gợi ý): kustomize 5.8 bắt buộc metadata.name. Không
 # dùng ttlSecondsAfterFinished: docs Argo CD cảnh báo sync có thể treo chờ hook đã bị xóa. Log của lần chạy thành công
-# chỉ còn trong Loki (ticket 14).
+# mất cùng Job tới khi Loki thu log pod (ticket 14, chưa làm).
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -47,6 +47,7 @@ spec:
           # Keycloak 26.6.4+ trả 403 khi công cụ cập nhật role realm-management, 6.6.0 mới bỏ qua các role này
           # (CHANGELOG 6.6.0). Ghim digest của image index (amd64, arm64); image chạy user 65534.
           # NÂNG CẤP: chọn tag <cli>-<keycloak> khớp major.minor Keycloak, đổi KEYCLOAK_VERSION bên dưới cùng commit.
+          # Commit chỉ đổi Job (hook) không làm app OutOfSync, auto-sync không chạy: phải Sync tay (gitops-argocd.md).
           image: docker.io/adorsys/keycloak-config-cli:6.6.0-26.8.1@sha256:1fafe0823820981c5d33d0e7682a27a817f4a178ab6933387a5c2fca366f92f2
           env:
             # Đi thẳng Service trong cụm: admin API không mở qua edge. NetworkPolicy của Keycloak cho pod cùng namespace

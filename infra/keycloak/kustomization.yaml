@@ -15,6 +15,10 @@ resources:
   - keycloak-config-cli.sealedsecret.yaml
   - realm-commerce-hub.sealedsecret.yaml
   - keycloak-config-cli.yaml
+generatorOptions:
+  annotations:
+    # Wave -1 cho ConfigMap (docs/standards/gitops-argocd.md mục "Sync waves").
+    argocd.argoproj.io/sync-wave: "-1"
 configMapGenerator:
   # File realm cho Job keycloak-config-cli. Hậu tố hash: sửa file realm là đổi tên ConfigMap, app OutOfSync, auto-sync
   # chạy lại Job. ConfigMap cũ bị prune.

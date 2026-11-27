@@ -32,6 +32,9 @@ verifyEmail: false
 accessTokenLifespan: 300
 ssoSessionIdleTimeout: 1800
 ssoSessionMaxLifespan: 36000
+# Client session: 0 nghĩa là bằng giá trị SSO tương ứng (không lớn hơn SSO, keycloak.md). Khai ra để là cấu hình dạng code.
+clientSessionIdleTimeout: 0
+clientSessionMaxLifespan: 0
 # Refresh token dùng một lần: dùng lại refresh token cũ sau khi đã refresh thì nhận invalid_grant (C5.3).
 revokeRefreshToken: true
 refreshTokenMaxReuse: 0

@@ -14,7 +14,8 @@ spec:
 
   # Image chính thức (image tùy biến có theme, passwordBlacklist: Hoãn tới G1). Ghim digest vì tag 26.8.2 đã bị đẩy lại
   # trên quay.io (c68e286c… dùng 2026-11-12 → 2026-11-19). Image index đa kiến trúc, user 1000.
-  # NÂNG CẤP: đổi cùng commit với bản operator (infra/keycloak-operator/), một Operator chạy đúng một bản Keycloak.
+  # NÂNG CẤP: đổi cùng commit với bản operator (infra/keycloak-operator/), một Operator chạy đúng một bản Keycloak, và với
+  # KEYCLOAK_VERSION cùng tag image trong keycloak-config-cli.yaml.
   image: quay.io/keycloak/keycloak:26.8.2@sha256:7e66a96e4739239070aeaf72e4c5decf0f7f682cfc725b9f7ea2b336eaba38b3
   # Bắt buộc khi đặt spec.image với image chưa `kc.sh build`: bỏ trống thì operator coi image là tùy biến đã tối ưu và chạy
   # `start --optimized` (mô tả trường startOptimized trong CRD 26.8.2). false: start tự build lại option db=postgres,
