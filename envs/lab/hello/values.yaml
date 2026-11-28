@@ -7,8 +7,8 @@
 # G0-30: gửi span tới Collector (env), ServiceMonitor, deployment.environment.name; thêm TRƯỚC khi merge image bật export.
 image:
   repository: ghcr.io/hoangduoc0603/commerce-hub-hello
-  digest: sha256:1e79455262656329aa69b5e8d3df7534cfda76c6f446ac6d1364827206f04773
-  tag: "28977e6b0e61d94232806727d5b4bb5ca96173b4"
+  digest: sha256:eedf4838deb5e85fe78f76ad790752829384b6ca28af56509b941e8ca5f4bc52
+  tag: "b4b15f01ff1021a7b5eddfbb2d6fe592123fb55f"
 
 # Lab chạy 1 replica cho mọi service (ADR-0004).
 replicaCount: 1
