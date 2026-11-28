@@ -72,3 +72,15 @@ configMapGenerator:
       # cardinality.json, nên sự kiện DELETED của cái cũ làm sidecar XÓA file vừa ghi, dashboard biến mất. Sidecar tự
       # thấy nội dung đổi, không cần đổi tên để kéo rollout.
       disableNameSuffixHash: true
+  # RED, JVM, Hikari của một service, chọn bằng biến service (G0-30 bước 10). Cùng cách nạp với Cardinality.
+  - name: grafana-dashboard-service-overview
+    namespace: observability
+    files:
+      - dashboards/service-overview.json
+    options:
+      labels:
+        grafana_dashboard: "1"
+      annotations:
+        argocd.argoproj.io/sync-wave: "-1"
+      # Cùng lý do với Cardinality ở trên.
+      disableNameSuffixHash: true
