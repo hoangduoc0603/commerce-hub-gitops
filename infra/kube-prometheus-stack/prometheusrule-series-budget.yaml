@@ -37,7 +37,8 @@ spec:
         # Ngân sách mỗi pod service (G0-30): 5 000 series (observability.md). Pod service = target của ServiceMonitor do
         # chart app sinh: container "app" (tên cố định trong chart) và endpoint "management". Chỉ endpoint thì không đủ:
         # Keycloak cũng scrape cổng tên management (2 807 sample lúc G0-30). Mốc lúc thêm: hello 309 sample lúc vừa khởi động, 396 sau khi có traffic (G0-30).
-        # Theo pod, không cộng theo service: G1 chạy 2 replica, mỗi pod có ngân sách riêng.
+        # Theo pod, không cộng theo service: G1 chạy 2 replica, mỗi pod có ngân sách riêng. Sample mỗi lần scrape chỉ xấp xỉ
+        # số series pod đóng góp (series cũ còn trong head 1–3 giờ sau khi nhãn đổi), đủ cho ngưỡng cảnh báo.
         - alert: ServiceSeriesBudgetExceeded
           expr: scrape_samples_post_metric_relabeling{container="app", endpoint="management"} > 5000
           for: 30m
