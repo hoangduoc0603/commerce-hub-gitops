@@ -141,14 +141,17 @@ spec:
             # nên 128. Tổng 384 + 2 × 128 = 640 Mi (+320 Mi so với ngân sách), ghi vào bản ghi G0 cho ticket 34. Phương án
             # bớt 128 Mi nếu cần: tắt sidecar datasources, khai datasource bằng grafana.datasources (file provisioning).
             # Request = limit, không CPU limit. Grafana viết bằng Go: GOMEMLIMIT ~90% limit, đổi CÙNG lúc với limit.
+            # G0-14 bước 8 (2026-11-28): với 384 Mi, container grafana bị OOMKilled 5 lần trong 6 giờ chạy rỗi (RSS dao
+            # động 260–370 Mi, ngoài heap Go còn SQLite và plugin; GOMEMLIMIT không giữ được phần đó). Nâng 512 Mi, tổng pod
+            # 768 Mi (+448 Mi so với ngân sách 04), ghi vào bản ghi G0 mục 11 cho ticket 34.
             resources:
               requests:
                 cpu: 50m
-                memory: 384Mi
+                memory: 512Mi
               limits:
-                memory: 384Mi
+                memory: 512Mi
             env:
-              GOMEMLIMIT: 345MiB
+              GOMEMLIMIT: 460MiB
             # Mặc định kube-prometheus-stack: sidecar dashboard tìm ConfigMap VÀ Secret ở MỌI namespace, chart cấp ClusterRole
             # get/list/watch configmaps, secrets toàn cụm. Tức pod Grafana đọc được mọi Secret của cụm (mật khẩu DB, khóa
             # CA...). Thu hẹp: Role trong
