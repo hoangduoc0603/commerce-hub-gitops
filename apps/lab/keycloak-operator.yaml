@@ -1,7 +1,9 @@
 # Keycloak Operator 26.8.2: đọc CR Keycloak (app keycloak, namespace keycloak) rồi dựng StatefulSet, Service, NetworkPolicy.
 # Ticket G0-10. Chuẩn: docs/standards/keycloak.md mục "Cài trên Kubernetes bằng Operator". ADR-0004.
 #
-# - Wave 6: cùng operator CloudNativePG, sau edge (5); trước CR Keycloak (wave 8, sau pg-main 7 vì Keycloak cần DB).
+# - Wave 7: sau kube-prometheus-stack (6), vì Operator chỉ xét CRD ServiceMonitor lúc KHỞI ĐỘNG: CRD có sau thì không tạo
+#   ServiceMonitor cho Keycloak tới lần restart kế (thấy ở G0-13: CRD 27/11 11:05, ServiceMonitor chỉ ra sau khi lab reboot
+#   28/11 02:38). Trước wave 6 → 7 hai app cùng wave, dựng cụm trắng là đua nhau. Vẫn trước CR Keycloak (wave 8).
 # - Không Helm: chart của Operator mới experimental (keycloak.md). Manifest vendor ở infra/keycloak-operator/upstream/.
 # - ServerSideApply=true: CRD keycloaks (~520 KB) và keycloakrealmimports (~428 KB) vượt giới hạn 262 144 byte của
 #   annotation last-applied-configuration khi apply phía client.
@@ -14,7 +16,7 @@ metadata:
   name: keycloak-operator
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "6"
+    argocd.argoproj.io/sync-wave: "7"
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:

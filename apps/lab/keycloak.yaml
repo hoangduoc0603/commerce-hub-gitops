@@ -1,7 +1,7 @@
 # Keycloak: CR Keycloak, thông tin DB, HTTPRoute auth.lab.internal (infra/keycloak/). Ticket G0-10.
 # Chuẩn: docs/standards/keycloak.md. ADR-0003 (DB trên pg-main), ADR-0004 (1 instance), ADR-0013 (Gateway edge).
 #
-# - Wave 8: sau pg-main (7), vì Keycloak migrate schema vào database keycloak ngay lúc khởi động; sau keycloak-operator (6),
+# - Wave 8: sau pg-main (7), vì Keycloak migrate schema vào database keycloak ngay lúc khởi động; sau keycloak-operator (7),
 #   vì CRD và operator phải có trước CR.
 # - Không CreateNamespace: namespace keycloak do app keycloak-operator tạo.
 # - Health: Argo CD 3.6.1 có sẵn health check cho k8s.keycloak.org/Keycloak (Ready=True là Healthy, HasErrors là Degraded).
