@@ -7,6 +7,8 @@
 # - Q2 (lộ trình G0-14): app gọi Service otel-collector, internalTrafficPolicy Local đưa request tới pod cùng node.
 #   Không hostPort: cổng OTLP không mở ra LAN. Bẫy: node không có pod Collector Ready thì request rơi, SDK thử lại.
 # - Q4: chỉ traces (bước 5 thêm logs). Metric đi đường Prometheus scrape, không qua Collector.
+# - Preset kubernetesAttributes (bước 4): ClusterRole chỉ đọc pods, namespaces, replicasets toàn cụm; mỗi agent chỉ
+#   watch pod trên node của nó (filter.node_from_env_var).
 # - Wave 7: cùng Tempo, Loki. Exporter tự thử lại nếu Tempo chưa sẵn sàng, nên không cần wave sau.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -76,8 +78,18 @@ spec:
               pipelines:
                 traces:
                   receivers: [otlp]
-                  processors: [memory_limiter, batch]
+                  # memory_limiter đầu tiên (chặn trước khi tốn RAM). k8s_attributes TRƯỚC batch: batch gom nhiều request
+                  # làm mất IP nguồn của kết nối, luật pod_association `connection` không tra được pod. Ghi tên ở đây thì
+                  # preset không tự chèn lên đầu pipeline; cấu hình processor do preset sinh.
+                  processors: [memory_limiter, k8s_attributes, batch]
                   exporters: [otlp_grpc/tempo]
+          presets:
+            # Gắn k8s.pod.name, k8s.namespace.name, k8s.node.name, k8s.deployment.name… vào resource (tiêu chí 1).
+            # Chart thêm: processor k8s_attributes (pod_association: k8s.pod.ip → k8s.pod.uid → IP nguồn kết nối;
+            # filter theo node vì mode daemonset), env K8S_NODE_NAME, ClusterRole chỉ đọc pods/namespaces/replicasets.
+            # Không bật extractAllPodLabels/Annotations: mọi nhãn thành thuộc tính, phình dữ liệu và dễ thành nhãn Loki.
+            kubernetesAttributes:
+              enabled: true
           ports:
             # 0 = không render hostPort (template chỉ ghi khi giá trị khác 0). Q2: không mở OTLP ra LAN.
             otlp:
