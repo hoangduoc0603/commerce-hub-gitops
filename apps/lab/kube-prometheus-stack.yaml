@@ -4,7 +4,10 @@
 # Docs: https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack
 #
 # - Wave 6: sau sealed-secrets (1), cert-manager (3, Certificate của webhook), edge (5, HTTPRoute Grafana); trước
-#   keycloak (8) để CRD ServiceMonitor có sẵn khi Keycloak Operator reconcile (G0-13 bước 7).
+#   keycloak-operator (7): Operator chỉ xét CRD ServiceMonitor lúc khởi động (G0-13 bước 7).
+# - GOMEMLIMIT: đặt cho Grafana và operator (đổi CÙNG lúc với limit). Không đặt cho Alertmanager (CR không có trường env),
+#   kube-state-metrics, node-exporter, config-reloader: dùng 14–31 Mi trên limit 48–128 Mi (đo 2026-11-28, bản ghi G0
+#   mục 10). Prometheus tự đặt (auto-gomemlimit).
 # - ServerSideApply=true: CRD prometheuses ~840 KiB, vượt giới hạn 262 144 byte của annotation last-applied-configuration
 #   khi apply client-side (README chart, mục "Argo CD").
 # - Chart OCI trên ghcr.io, repoURL không có tiền tố oci:// (Argo CD coi repoURL không scheme là Helm OCI), như
@@ -37,6 +40,8 @@ spec:
           # Rule và alert mặc định của kube-prometheus (node, kubelet, workload, Prometheus, Alertmanager). Nhóm của etcd,
           # scheduler, controller-manager, kube-proxy tự tắt theo kubeEtcd/kubeScheduler/... .enabled bên dưới. Rule tự
           # viết (ngân sách series) nằm trong infra/kube-prometheus-stack/prometheusrule-series-budget.yaml.
+          # Lệch observability.md ("mỗi alert có runbook_url trỏ vào docs/runbooks/"): ~130 alert mặc định giữ runbook_url
+          # của upstream (runbooks.prometheus-operator.dev), không viết lại; chỉ alert tự viết trỏ docs/runbooks/.
           defaultRules:
             create: true
           # Prometheus đơn bản (ADR-0004, observability.md mục "Collector và backend"). Không có route trên edge: chỉ
@@ -50,7 +55,9 @@ spec:
               # Chọn MỌI ServiceMonitor/PodMonitor/PrometheusRule/Probe/ScrapeConfig trong mọi namespace. Mặc định chart
               # (`true`) chỉ chọn object mang nhãn release=kube-prometheus-stack, nên ServiceMonitor do Keycloak Operator
               # hay chart app sinh ra bị bỏ qua im lặng (không lỗi, chỉ không có target). Namespace selector để trống =
-              # mọi namespace. Ranh giới: project commerce không tạo được Prometheus, chỉ khai ServiceMonitor của mình.
+              # mọi namespace. Project commerce không tạo được Prometheus nhưng tạo được ServiceMonitor, và ServiceMonitor đặt
+              # được namespaceSelector trỏ namespace khác (ignoreNamespaceSelectors sẽ vỡ monitor kubelet, CoreDNS,
+              # apiserver của chart). Chấp nhận ở G0 (một người dùng); xét lại ở ticket 30.
               serviceMonitorSelectorNilUsesHelmValues: false
               podMonitorSelectorNilUsesHelmValues: false
               ruleSelectorNilUsesHelmValues: false
@@ -133,7 +140,7 @@ spec:
             # OOMKilled trong 2 s đầu (đỉnh lúc Python khởi động, mẫu 30 s của cAdvisor không bắt được), 128 Mi chạy ổn,
             # nên 128. Tổng 384 + 2 × 128 = 640 Mi (+320 Mi so với ngân sách), ghi vào bản ghi G0 cho ticket 34. Phương án
             # bớt 128 Mi nếu cần: tắt sidecar datasources, khai datasource bằng grafana.datasources (file provisioning).
-            # Request = limit, không CPU limit. Grafana viết bằng Go: GOMEMLIMIT ~90% limit.
+            # Request = limit, không CPU limit. Grafana viết bằng Go: GOMEMLIMIT ~90% limit, đổi CÙNG lúc với limit.
             resources:
               requests:
                 cpu: 50m
@@ -249,7 +256,8 @@ spec:
                 memory: 128Mi
               limits:
                 memory: 128Mi
-            # env là map (chart đặt sẵn GOGC: "30", được giữ khi gộp). GOMEMLIMIT ~90% limit để GC biết trần.
+            # env là map (chart đặt sẵn GOGC: "30", được giữ khi gộp). GOMEMLIMIT ~90% limit để GC biết trần; đổi CÙNG
+            # lúc với limit.
             env:
               GOMEMLIMIT: 115MiB
     # Namespace observability, CRD vendor; các bước sau thêm SealedSecret, HTTPRoute, rule, dashboard.

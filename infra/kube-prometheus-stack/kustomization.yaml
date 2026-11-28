@@ -65,6 +65,9 @@ configMapGenerator:
     options:
       labels:
         grafana_dashboard: "1"
+      # Wave -1 theo gitops-argocd.md mục "Sync waves" (ConfigMap trước workload). Sidecar nạp động nên không bắt buộc.
+      annotations:
+        argocd.argoproj.io/sync-wave: "-1"
       # Tắt hậu tố hash: đổi JSON thì Argo CD tạo ConfigMap tên mới rồi mới prune cái cũ. Hai ConfigMap cùng key
       # cardinality.json, nên sự kiện DELETED của cái cũ làm sidecar XÓA file vừa ghi, dashboard biến mất. Sidecar tự
       # thấy nội dung đổi, không cần đổi tên để kéo rollout.

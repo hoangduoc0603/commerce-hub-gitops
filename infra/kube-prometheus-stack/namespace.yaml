@@ -6,7 +6,9 @@
 #   ra namespace riêng (ticket ghi mọi thành phần ở observability; thêm một namespace chỉ cho một DaemonSet).
 #   https://kubernetes.io/docs/concepts/security/pod-security-standards/
 # - edge.lab.internal/routes: cho HTTPRoute grafana.lab.internal gắn vào listener https của Gateway edge (bước 5).
-# - Prune=false: commit lỡ không xóa namespace (xóa là mất PVC dữ liệu Prometheus).
+# - Prune=false,Delete=false: commit lỡ không xóa namespace, và xóa app (có finalizer cascade) cũng không xóa namespace;
+#   xóa namespace là mất PVC dữ liệu Prometheus, PVC do StatefulSet sinh nên Argo CD không theo dõi để gắn Delete=false
+#   (gitops-argocd.md: tài nguyên giữ dữ liệu có Delete=false; như infra/pg-main/namespace.yaml).
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -16,4 +18,4 @@ metadata:
     pod-security.kubernetes.io/enforce-version: v1.37
     edge.lab.internal/routes: "true"
   annotations:
-    argocd.argoproj.io/sync-options: Prune=false
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
