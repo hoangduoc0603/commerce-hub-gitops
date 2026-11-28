@@ -157,6 +157,50 @@ spec:
             # searchNamespace ghi tên tường minh: null trong valuesObject bị mất khi lưu Application (gitops-argocd.md).
             rbac:
               namespaced: true
+            # Datasource Tempo, Loki (G0-14 bước 7), uid cố định để link giữa chúng và exemplar trỏ được. Chart ghép vào
+            # cùng ConfigMap datasource với Prometheus (sidecar datasources nạp). Không secret: Tempo, Loki trong cụm,
+            # không auth (Loki auth_enabled: false). `$$` là cách thoát `$` của Grafana provisioning (không thì Grafana
+            # thay ${...} bằng biến môi trường, thành rỗng); Helm tpl và Argo CD không đụng tới `$`.
+            additionalDataSources:
+              - name: Tempo
+                uid: tempo
+                type: tempo
+                access: proxy
+                url: http://tempo.observability.svc:3200
+                editable: false
+                jsonData:
+                  # Trace → log: nút "Logs for this span" mở Loki, lọc theo namespace của span (resource attribute do
+                  # k8s_attributes gắn, cũng là nhãn index của Loki) và structured metadata trace_id. Lùi/tiến 5 phút
+                  # quanh span vì log có thể ghi trước/sau thời điểm span.
+                  tracesToLogsV2:
+                    datasourceUid: loki
+                    spanStartTimeShift: -5m
+                    spanEndTimeShift: 5m
+                    tags:
+                      - key: k8s.namespace.name
+                        value: k8s_namespace_name
+                    customQuery: true
+                    query: '{$${__tags}} | trace_id="$${__trace.traceId}"'
+                  # Đồ thị span cha-con trong trace view; service graph cần metrics-generator (chưa bật) nên không khai.
+                  nodeGraph:
+                    enabled: true
+              - name: Loki
+                uid: loki
+                type: loki
+                access: proxy
+                url: http://loki.observability.svc:3100
+                editable: false
+                jsonData:
+                  maxLines: 1000
+                  # Log → trace (tiêu chí 2): structured metadata trace_id (Collector bước 6) thành link nội bộ sang
+                  # Tempo. matcherType label khớp theo tên nhãn/structured metadata, không regex trên nội dung dòng.
+                  derivedFields:
+                    - name: TraceID
+                      matcherType: label
+                      matcherRegex: trace_id
+                      datasourceUid: tempo
+                      url: '$${__value.raw}'
+                      urlDisplayLabel: Mở trace
             # Hai sidecar (dashboards, datasources) dùng chung image và resources. k8s-sidecar là Python.
             sidecar:
               dashboards:
@@ -164,6 +208,12 @@ spec:
                 resource: configmap
               datasources:
                 resource: configmap
+                # Metric → trace (G0-14 bước 7): exemplar của histogram (Micrometer gắn nhãn trace_id) thành link mở
+                # trace trên datasource uid tempo (khai ở additionalDataSources bên dưới).
+                exemplarTraceIdDestinations:
+                  datasourceUid: tempo
+                  traceIdLabelName: trace_id
+                  urlDisplayLabel: Mở trace
               image:
                 sha: 52d311dcedd587421a236c4d6c621f05614c40a51386e955e0699dca97ec0880
               resources:
