@@ -1,0 +1,132 @@
+# Loki 3.7.10 Monolithic (chart grafana-community/loki 21.6.3): lưu log, giữ 14 ngày (N14). Ticket G0-14 bước 2.
+# Chuẩn: docs/standards/observability.md mục "Collector và backend", "Log có cấu trúc"; gitops-argocd.md.
+# Ngân sách RAM: ticket kiến trúc 04. Docs: https://grafana.com/docs/loki/latest/setup/install/helm/
+#
+# - Monolithic: một pod -target=all trên PVC local-path. Lệch có chủ đích: filesystem thay vì object storage, một bản,
+#   không HA (observability.md "Lệch chuẩn có chủ đích").
+# - Wave 7: sau kube-prometheus-stack (6), app tạo namespace observability.
+# - Không route ra edge: Collector (bước 5) ghi, Grafana (bước 7) đọc, qua Service loki trong cụm.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: loki
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  sources:
+    # NÂNG CẤP: đổi cùng commit targetRevision và loki.image.digest (digest thắng appVersion của chart). Chart này
+    # đổi mặc định khá thường xuyên: đọc CHANGELOG, render lại và so danh sách object trước khi push.
+    # Digest gói chart (index.yaml, khớp sha256 của loki-21.6.3.tgz): sha256 ae4d071a32dcd9111367a1a7457f8ec1f2c2e1a2167bec1b606615676667d026
+    - repoURL: https://grafana-community.github.io/helm-charts
+      chart: loki
+      targetRevision: 21.6.3
+      helm:
+        releaseName: loki
+        valuesObject:
+          # Ghi tường minh dù trùng mặc định (observability.md: "đặt tường minh deploymentMode: Monolithic").
+          deploymentMode: Monolithic
+          # Tên object cố định "loki" (Service loki.observability.svc): Collector và datasource Grafana trỏ vào tên này.
+          fullnameOverride: loki
+          loki:
+            image:
+              # Digest của image index đa kiến trúc grafana/loki:3.7.10. Có digest thì chart render repo@digest (bỏ tag).
+              digest: sha256:b43c257ccfc925d4a50b8717cac61a3b51df8c48d01847936057e5c4075a24a7
+            # Q3 (lộ trình G0-14): một tenant ("fake"), không cần header X-Scope-OrgID. Cô lập Workspace nằm ở app (RLS),
+            # không ở tenant Loki.
+            auth_enabled: false
+            commonConfig:
+              # Một bản: mặc định 3 thì ingester chờ 3 bản xác nhận, không bao giờ đủ.
+              replication_factor: 1
+            # Chunk và index trên PVC (/var/loki). Mặc định chart là s3.
+            storage:
+              type: filesystem
+            # Chart để trống và không tự điền: thiếu là Loki không khởi động. TSDB + v13 là bản hiện hành (structured
+            # metadata cần v13); period 24h là bắt buộc để retention chạy. KHÔNG sửa mục này về sau: đổi định dạng thì
+            # thêm mục mới với `from` ở tương lai, dữ liệu cũ vẫn đọc theo mục cũ.
+            schemaConfig:
+              configs:
+                - from: "2026-11-28"
+                  store: tsdb
+                  object_store: filesystem
+                  schema: v13
+                  index:
+                    prefix: index_
+                    period: 24h
+            # N14: log 14 ngày. Chỉ có hiệu lực khi compactor bật retention (dưới đây).
+            limits_config:
+              retention_period: 336h
+            # Compactor đánh dấu chunk quá hạn mỗi 10 phút, xóa thật sau retention_delete_delay (mặc định 2h).
+            # delete_request_store bắt buộc khi bật retention (Loki 3). working_directory suy từ common.path_prefix
+            # (/var/loki/compactor, trên PVC).
+            compactor:
+              retention_enabled: true
+              delete_request_store: filesystem
+            # Không gửi số liệu sử dụng về Grafana Labs.
+            analytics:
+              reporting_enabled: false
+          singleBinary:
+            # Mặc định chart là 0 (!): phải bật tường minh.
+            replicas: 1
+            # Ngân sách ticket 04: Loki 512 Mi (ước lượng, chưa đo), request = limit, không CPU limit. Chart tự đặt
+            # GOMEMLIMIT = 0,85 × limit (435 MiB) và GOGC=80 (defaults.goSettings), nên không khai env. Đo ở bước 8.
+            resources:
+              requests:
+                cpu: 50m
+                memory: 512Mi
+              limits:
+                memory: 512Mi
+            # PVC từ volumeClaimTemplates (storage-loki-0), StatefulSet controller tạo; K8s giữ PVC khi xóa StatefulSet
+            # vì enableStatefulSetAutoDeletePVC mặc định false (whenDeleted: Delete của chart chỉ có hiệu lực khi bật nó).
+            persistence:
+              storageClass: local-path
+              # local-path không ép dung lượng: số này chỉ là nhãn.
+              size: 5Gi
+          # Kiểu SimpleScalable của chart (mặc định mỗi loại 3 bản). Phải về 0, không thì chart dừng render ("more than
+          # zero replicas configured for both the monolithic and simple scalable targets").
+          write:
+            replicas: 0
+          read:
+            replicas: 0
+          backend:
+            replicas: 0
+          # Mặc định request 9830 Mi và 1229 Mi, không vừa node 8 GiB (ticket 04). memcached.enabled: false bỏ nốt
+          # ServiceAccount loki-memcached.
+          chunksCache:
+            enabled: false
+          resultsCache:
+            enabled: false
+          memcached:
+            enabled: false
+          # nginx đứng trước Loki: chỉ cần khi có nhiều thành phần để định tuyến. Monolithic gọi thẳng Service loki.
+          gateway:
+            enabled: false
+          # DaemonSet ghi/đọc log thử (3 pod) và Helm test (Argo CD không chạy hook test).
+          lokiCanary:
+            enabled: false
+          test:
+            enabled: false
+          # Lệch mặc định có chủ đích (giống Grafana, G0-13): sidecar nạp rule từ ConfigMap kéo theo ClusterRole
+          # get/list/watch configmaps, secrets TOÀN CỤM. Chưa dùng alert trên log: tắt sidecar; rbac.namespaced: true
+          # bỏ ClusterRole/Binding, và vì sidecar tắt nên cũng không sinh Role. Kết quả: Loki không có quyền API nào.
+          sidecar:
+            rules:
+              enabled: false
+          rbac:
+            namespaced: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
