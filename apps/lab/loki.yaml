@@ -59,6 +59,19 @@ spec:
             # N14: log 14 ngày. Chỉ có hiệu lực khi compactor bật retention (dưới đây).
             limits_config:
               retention_period: 336h
+              # Log đến qua OTLP (Collector, G0-14 bước 5). Mặc định Loki đưa 18 resource attribute vào nhãn index, gồm
+              # k8s.pod.name, service.instance.id, k8s.replicaset.name: đổi theo từng pod, mỗi lần deploy sinh stream
+              # mới. Chuẩn (observability.md "Log có cấu trúc") chỉ cho nhãn tĩnh: bỏ danh sách mặc định, giữ 3 nhãn;
+              # mọi thuộc tính khác (pod, node, trace_id…) thành structured metadata, vẫn lọc được nhưng không vào index.
+              otlp_config:
+                resource_attributes:
+                  ignore_defaults: true
+                  attributes_config:
+                    - action: index_label
+                      attributes:
+                        - service.name
+                        - service.namespace
+                        - k8s.namespace.name
             # Compactor đánh dấu chunk quá hạn mỗi 10 phút, xóa thật sau retention_delete_delay (mặc định 2h).
             # delete_request_store bắt buộc khi bật retention (Loki 3). working_directory suy từ common.path_prefix
             # (/var/loki/compactor, trên PVC).

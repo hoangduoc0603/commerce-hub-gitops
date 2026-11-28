@@ -1,14 +1,17 @@
 # OpenTelemetry Collector contrib 0.165.0, DaemonSet (chart open-telemetry/opentelemetry-collector 0.183.2): nhận OTLP
-# từ app cùng node, đẩy trace tới Tempo. Ticket G0-14 bước 3 (bước 4–6 thêm k8s attributes, thu log).
+# từ app cùng node, đẩy trace tới Tempo; đọc log mọi pod trên node, đẩy tới Loki. Ticket G0-14 bước 3–6.
 # Chuẩn: docs/standards/observability.md mục "Collector và backend", bảng Lựa chọn "Tầng Collector"; gitops-argocd.md.
 # Docs: https://opentelemetry.io/docs/platforms/kubernetes/helm/collector/
 #
 # - Chỉ agent (DaemonSet), không gateway: chưa tail sampling (observability.md).
 # - Q2 (lộ trình G0-14): app gọi Service otel-collector, internalTrafficPolicy Local đưa request tới pod cùng node.
 #   Không hostPort: cổng OTLP không mở ra LAN. Bẫy: node không có pod Collector Ready thì request rơi, SDK thử lại.
-# - Q4: chỉ traces (bước 5 thêm logs). Metric đi đường Prometheus scrape, không qua Collector.
+# - Q4: chỉ traces và logs. Metric đi đường Prometheus scrape, không qua Collector.
 # - Preset kubernetesAttributes (bước 4): ClusterRole chỉ đọc pods, namespaces, replicasets toàn cụm; mỗi agent chỉ
 #   watch pod trên node của nó (filter.node_from_env_var).
+# - Preset logsCollection (bước 5): đọc /var/log/pods trên node (hostPath), checkpoint ở /var/lib/otelcol trên node
+#   (Q1) nên container chạy root (namespace observability PSA privileged). Log chỉ đi đường file, không qua OTLP: app
+#   không đẩy log qua OTLP (observability.md "Thu log"), receiver otlp không nằm trong pipeline logs nên không trùng.
 # - Wave 7: cùng Tempo, Loki. Exporter tự thử lại nếu Tempo chưa sẵn sàng, nên không cần wave sau.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -73,6 +76,10 @@ spec:
                 tls:
                   # Lệch có chủ đích: gRPC không TLS trong cụm (lab, cùng namespace). Receiver Tempo không bật TLS.
                   insecure: true
+              # Endpoint OTLP của Loki; exporter tự thêm /v1/logs. Loki quyết định thuộc tính nào thành nhãn index
+              # (limits_config.otlp_config trong apps/lab/loki.yaml), phần còn lại thành structured metadata.
+              otlp_http/loki:
+                endpoint: http://loki.observability.svc:3100/otlp
             service:
               extensions: [health_check]
               pipelines:
@@ -83,6 +90,12 @@ spec:
                   # preset không tự chèn lên đầu pipeline; cấu hình processor do preset sinh.
                   processors: [memory_limiter, k8s_attributes, batch]
                   exporters: [otlp_grpc/tempo]
+                logs:
+                  # Chỉ file_log (preset sinh cấu hình receiver). k8s_attributes tra pod theo k8s.pod.uid mà parser
+                  # container lấy từ đường dẫn file, không cần IP nguồn.
+                  receivers: [file_log]
+                  processors: [memory_limiter, k8s_attributes, batch]
+                  exporters: [otlp_http/loki]
           presets:
             # Gắn k8s.pod.name, k8s.namespace.name, k8s.node.name, k8s.deployment.name… vào resource (tiêu chí 1).
             # Chart thêm: processor k8s_attributes (pod_association: k8s.pod.ip → k8s.pod.uid → IP nguồn kết nối;
@@ -90,6 +103,14 @@ spec:
             # Không bật extractAllPodLabels/Annotations: mọi nhãn thành thuộc tính, phình dữ liệu và dễ thành nhãn Loki.
             kubernetesAttributes:
               enabled: true
+            # Receiver file_log đọc /var/log/pods/*/*/*.log (trừ log của chính Collector, tránh vòng lặp), parser
+            # `container` tách định dạng CRI và gắn k8s.pod.uid, k8s.pod.name, k8s.namespace.name, k8s.container.name
+            # từ đường dẫn. start_at: end: lần đầu chạy không đọc lại log cũ của cả node.
+            logsCollection:
+              enabled: true
+              # Q1: lưu vị trí đã đọc (extension file_storage, hostPath /var/lib/otelcol). Không có thì Collector restart
+              # bắt đầu lại ở cuối file (start_at: end), mất log ghi ra trong lúc restart. Chart đổi container sang root.
+              storeCheckpoints: true
           ports:
             # 0 = không render hostPort (template chỉ ghi khi giá trị khác 0). Q2: không mở OTLP ra LAN.
             otlp:
