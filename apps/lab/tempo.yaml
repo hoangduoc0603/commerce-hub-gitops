@@ -7,8 +7,9 @@
 #   một bản, không HA (observability.md "Lệch chuẩn có chủ đích").
 # - Wave 7: sau kube-prometheus-stack (6), app tạo namespace observability.
 # - Không route ra edge: chỉ Grafana (trong cụm) và Collector (bước 3) gọi Service tempo.
-# - Receiver jaeger, zipkin của chart giữ mặc định (mức tối thiểu): chỉ nghe trong pod/Service nội bộ. Bỏ được bằng
-#   `jaeger: null`, nhưng null trong valuesObject bị mất khi lưu Application (gitops-argocd.md, G0-05).
+# - Receiver jaeger, zipkin của chart giữ mặc định (mức tối thiểu): chỉ nghe trong pod/Service nội bộ, Collector không
+#   gửi tới (Q4). Muốn bỏ thì dùng helm.parameters `value: "null"` (null trong valuesObject bị mất, gitops-argocd.md);
+#   không làm vì không có ai gọi các cổng này.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -41,8 +42,9 @@ spec:
             # N14: trace 7 ngày. Chart render vào backend_worker.compaction.block_retention (nơi Tempo thực thi xóa) và
             # backend_scheduler.provider.compaction.compaction.block_retention. Mặc định chart 24h.
             retention: 168h
-            # Ngân sách ticket 04: Tempo 512 Mi (ước lượng, chưa đo), request = limit, không CPU limit (tránh throttling).
-            # Giữ 512 tới bước 8: đo RSS lúc khởi động, nhận trace, query rồi chốt ~1,3 × đỉnh.
+            # Ngân sách ticket 04: Tempo 512 Mi, request = limit, không CPU limit (tránh throttling). Đo G0-14 bước 8
+            # (bản ghi G0 mục 11): đỉnh working set 418 Mi ở 150 span/s, heap về 91 MB sau 4 phút. Dư 18%, dưới mức
+            # ~1,3 × đỉnh: cố ý giữ 512 theo ngân sách, ticket 34 đo ở tải G1 rồi chọn nâng limit, giới hạn ingest hay sampling.
             resources:
               requests:
                 cpu: 50m

@@ -84,8 +84,8 @@ spec:
           singleBinary:
             # Mặc định chart là 0 (!): phải bật tường minh.
             replicas: 1
-            # Ngân sách ticket 04: Loki 512 Mi (ước lượng, chưa đo), request = limit, không CPU limit. Chart tự đặt
-            # GOMEMLIMIT = 0,85 × limit (435 MiB) và GOGC=80 (defaults.goSettings), nên không khai env. Đo ở bước 8.
+            # Ngân sách ticket 04: Loki 512 Mi, request = limit, không CPU limit. Chart tự đặt GOMEMLIMIT = 0,85 × limit
+            # (435 MiB) và GOGC=80 (defaults.goSettings), nên không khai env. Đo G0-14 bước 8: đỉnh 151 Mi ở 450 dòng/s.
             resources:
               requests:
                 cpu: 50m

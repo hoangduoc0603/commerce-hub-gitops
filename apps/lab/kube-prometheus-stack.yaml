@@ -136,9 +136,9 @@ spec:
                 check_for_plugin_updates: false
             # Lệch ngân sách ticket 04 ("Grafana và sidecar 320 Mi"): với 224 + 2 × 48 Mi cả ba container bị OOMKilled ngay
             # lúc khởi động (2026-11-27). Đo với limit tạm 512/128 Mi: đỉnh Grafana 298 Mi (đăng ký ~20 plugin datasource
-            # lõi), mỗi sidecar 78 Mi lúc ổn định (Python). Grafana chốt ~1,3 × đỉnh = 384 Mi. Sidecar: 96 Mi vẫn bị
+            # lõi), mỗi sidecar 78 Mi lúc ổn định (Python). G0-13 chốt Grafana ~1,3 × đỉnh = 384 Mi (đã nâng 512, xem dưới). Sidecar: 96 Mi vẫn bị
             # OOMKilled trong 2 s đầu (đỉnh lúc Python khởi động, mẫu 30 s của cAdvisor không bắt được), 128 Mi chạy ổn,
-            # nên 128. Tổng 384 + 2 × 128 = 640 Mi (+320 Mi so với ngân sách), ghi vào bản ghi G0 cho ticket 34. Phương án
+            # nên 128. Tổng lúc G0-13 384 + 2 × 128 = 640 Mi (+320 Mi so với ngân sách), ghi vào bản ghi G0 cho ticket 34. Phương án
             # bớt 128 Mi nếu cần: tắt sidecar datasources, khai datasource bằng grafana.datasources (file provisioning).
             # Request = limit, không CPU limit. Grafana viết bằng Go: GOMEMLIMIT ~90% limit, đổi CÙNG lúc với limit.
             # G0-14 bước 8 (2026-11-28): với 384 Mi, container grafana bị OOMKilled 5 lần trong 6 giờ chạy rỗi (RSS dao
@@ -194,7 +194,6 @@ spec:
                 url: http://loki.observability.svc:3100
                 editable: false
                 jsonData:
-                  maxLines: 1000
                   # Log → trace (tiêu chí 2): structured metadata trace_id (Collector bước 6) thành link nội bộ sang
                   # Tempo. matcherType label khớp theo tên nhãn/structured metadata, không regex trên nội dung dòng.
                   derivedFields:
@@ -212,7 +211,7 @@ spec:
               datasources:
                 resource: configmap
                 # Metric → trace (G0-14 bước 7): exemplar của histogram (Micrometer gắn nhãn trace_id) thành link mở
-                # trace trên datasource uid tempo (khai ở additionalDataSources bên dưới).
+                # trace trên datasource uid tempo (khai ở grafana.additionalDataSources phía trên).
                 exemplarTraceIdDestinations:
                   datasourceUid: tempo
                   traceIdLabelName: trace_id

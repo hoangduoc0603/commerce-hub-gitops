@@ -157,11 +157,13 @@ spec:
               enabled: false
             zipkin:
               enabled: false
-          # Daemonset mặc định không tạo Service. Bật thì chart tự đặt internalTrafficPolicy: Local.
+          # Daemonset mặc định không tạo Service. internalTrafficPolicy: Local là mấu chốt của Q2 (request vào Collector
+          # cùng node); chart 0.183.2 tự đặt cho daemonset, vẫn ghi tường minh để nâng chart không đổi hành vi im lặng.
           service:
             enabled: true
-          # Ngân sách ticket 04: 3 × 192 Mi (ước lượng, chưa đo), request = limit, không CPU limit. Chart tự đặt
-          # GOMEMLIMIT = 80% limit (153 MiB, useGOMEMLIMIT). Đo ở bước 8, sau khi có thu log.
+            internalTrafficPolicy: Local
+          # Ngân sách ticket 04: 3 × 192 Mi, request = limit, không CPU limit. Chart tự đặt GOMEMLIMIT = 80% limit
+          # (153 MiB, useGOMEMLIMIT). Đo G0-14 bước 8: đỉnh 110 Mi mỗi pod ở 50 span/s và 150 dòng log/s mỗi node.
           resources:
             requests:
               cpu: 50m
