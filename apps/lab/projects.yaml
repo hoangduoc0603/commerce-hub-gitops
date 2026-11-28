@@ -62,6 +62,8 @@ spec:
     # grafana-community: chart tempo (monolithic, G0-14), loki (G0-14 bước 2). Repo HTTP, không phải OCI.
     # Chart grafana/tempo cũ dừng ở 1.24.x (Tempo 2.9); bản cho Tempo 3.x chỉ có ở grafana-community.
     - https://grafana-community.github.io/helm-charts
+    # OpenTelemetry: chart opentelemetry-collector (G0-14 bước 3). Repo HTTP, không phải OCI.
+    - https://open-telemetry.github.io/opentelemetry-helm-charts
   destinations:
     - server: https://kubernetes.default.svc
       namespace: '*'

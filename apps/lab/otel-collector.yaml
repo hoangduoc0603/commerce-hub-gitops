@@ -1,0 +1,119 @@
+# OpenTelemetry Collector contrib 0.165.0, DaemonSet (chart open-telemetry/opentelemetry-collector 0.183.2): nhận OTLP
+# từ app cùng node, đẩy trace tới Tempo. Ticket G0-14 bước 3 (bước 4–6 thêm k8s attributes, thu log).
+# Chuẩn: docs/standards/observability.md mục "Collector và backend", bảng Lựa chọn "Tầng Collector"; gitops-argocd.md.
+# Docs: https://opentelemetry.io/docs/platforms/kubernetes/helm/collector/
+#
+# - Chỉ agent (DaemonSet), không gateway: chưa tail sampling (observability.md).
+# - Q2 (lộ trình G0-14): app gọi Service otel-collector, internalTrafficPolicy Local đưa request tới pod cùng node.
+#   Không hostPort: cổng OTLP không mở ra LAN. Bẫy: node không có pod Collector Ready thì request rơi, SDK thử lại.
+# - Q4: chỉ traces (bước 5 thêm logs). Metric đi đường Prometheus scrape, không qua Collector.
+# - Wave 7: cùng Tempo, Loki. Exporter tự thử lại nếu Tempo chưa sẵn sàng, nên không cần wave sau.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: otel-collector
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  sources:
+    # NÂNG CẤP: đổi cùng commit targetRevision và image.digest (chart không có image mặc định). Đọc UPGRADING.md của
+    # chart (hay đổi tên thành phần, ví dụ otlp → otlp_grpc ở 0.162) và render lại trước khi push.
+    # Digest gói chart (index.yaml, khớp sha256 của opentelemetry-collector-0.183.2.tgz): sha256 1a03e12a861c03909f3310d00cff99fa8e27b57c686c98d5bf4457831c5e05f4
+    - repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
+      chart: opentelemetry-collector
+      targetRevision: 0.183.2
+      helm:
+        releaseName: otel-collector
+        valuesObject:
+          # Chart bắt buộc đặt (mặc định rỗng, render báo lỗi). Preset logsCollection chỉ đúng ở daemonset: chạy
+          # Deployment nhiều bản thì mỗi bản đọc cùng file log, log bị thu trùng (tiêu chí 4).
+          mode: daemonset
+          # Service tên cố định otel-collector.observability.svc (app trỏ vào). DaemonSet, ConfigMap thêm hậu tố -agent.
+          fullnameOverride: otel-collector
+          image:
+            # Bản contrib: có k8s_attributes, file_log (bước 4, 5). Entrypoint /otelcol-contrib, không cần command.name.
+            repository: otel/opentelemetry-collector-contrib
+            # Digest image index đa kiến trúc của tag 0.165.0. Có digest thì chart bỏ tag.
+            digest: sha256:e40d61f10c9a617cca1ffd1be4d7e2b3a4b0f0001798ff07e58cabe82e618cea
+          # Thay hẳn `config` mặc định (jaeger, zipkin, prometheus receiver, pipeline metrics/logs, exporter debug), KHÔNG
+          # trộn với nó. Bỏ mặc định bằng null không dùng được: null mất khi lưu valuesObject (gitops-argocd.md, G0-05).
+          # Preset (bước 4, 5) vẫn được chart chèn vào sau. ${env:...} là cú pháp của Collector, không phải Helm.
+          alternateConfig:
+            extensions:
+              # Chart bắt buộc có (render báo lỗi nếu thiếu): liveness và readiness probe gọi :13133/.
+              health_check:
+                endpoint: ${env:MY_POD_IP}:13133
+            receivers:
+              otlp:
+                protocols:
+                  # Nghe trên IP pod, không 0.0.0.0. Spring Boot gửi HTTP 4318 (observability.md), telemetrygen gửi gRPC.
+                  grpc:
+                    endpoint: ${env:MY_POD_IP}:4317
+                  http:
+                    endpoint: ${env:MY_POD_IP}:4318
+            processors:
+              # Phải đứng đầu pipeline. Soft limit = 80% − 25% = 55% limit (≈105 Mi): từ chối dữ liệu mới, app thử lại.
+              # Hard limit 80%: ép GC. Tính theo limit của container (cgroup).
+              memory_limiter:
+                check_interval: 5s
+                limit_percentage: 80
+                spike_limit_percentage: 25
+              # Gom lô trước khi gửi (mặc định 8192 span hoặc 200 ms).
+              batch: {}
+            exporters:
+              # Tên mới của exporter otlp (chart 0.162 đổi; ghi thẳng tên mới cho khớp cấu hình chạy thật).
+              otlp_grpc/tempo:
+                endpoint: tempo.observability.svc:4317
+                tls:
+                  # Lệch có chủ đích: gRPC không TLS trong cụm (lab, cùng namespace). Receiver Tempo không bật TLS.
+                  insecure: true
+            service:
+              extensions: [health_check]
+              pipelines:
+                traces:
+                  receivers: [otlp]
+                  processors: [memory_limiter, batch]
+                  exporters: [otlp_grpc/tempo]
+          ports:
+            # 0 = không render hostPort (template chỉ ghi khi giá trị khác 0). Q2: không mở OTLP ra LAN.
+            otlp:
+              hostPort: 0
+            otlp-http:
+              hostPort: 0
+            # Q4: không nhận Jaeger, Zipkin. Tắt cổng trên pod và Service.
+            jaeger-compact:
+              enabled: false
+            jaeger-thrift:
+              enabled: false
+            jaeger-grpc:
+              enabled: false
+            zipkin:
+              enabled: false
+          # Daemonset mặc định không tạo Service. Bật thì chart tự đặt internalTrafficPolicy: Local.
+          service:
+            enabled: true
+          # Ngân sách ticket 04: 3 × 192 Mi (ước lượng, chưa đo), request = limit, không CPU limit. Chart tự đặt
+          # GOMEMLIMIT = 80% limit (153 MiB, useGOMEMLIMIT). Đo ở bước 8, sau khi có thu log.
+          resources:
+            requests:
+              cpu: 50m
+              memory: 192Mi
+            limits:
+              memory: 192Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
