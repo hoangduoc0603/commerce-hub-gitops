@@ -59,6 +59,9 @@ spec:
     # kube-prometheus-stack: chart OCI ghcr.io/prometheus-community/charts/kube-prometheus-stack (G0-13). Subchart
     # grafana, kube-state-metrics, node-exporter nằm sẵn trong gói chart (charts/), không cần thêm repo.
     - ghcr.io/prometheus-community/charts
+    # grafana-community: chart tempo (monolithic, G0-14), loki (G0-14 bước 2). Repo HTTP, không phải OCI.
+    # Chart grafana/tempo cũ dừng ở 1.24.x (Tempo 2.9); bản cho Tempo 3.x chỉ có ở grafana-community.
+    - https://grafana-community.github.io/helm-charts
   destinations:
     - server: https://kubernetes.default.svc
       namespace: '*'

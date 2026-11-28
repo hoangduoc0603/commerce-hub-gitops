@@ -1,0 +1,78 @@
+# Tempo 3.1.1 monolithic (chart grafana-community/tempo 3.2.1): lưu trace. Ticket G0-14 bước 1.
+# Chuẩn: docs/standards/observability.md mục "Collector và backend"; gitops-argocd.md. Ngân sách RAM: ticket kiến trúc 04.
+# Docs: https://grafana.com/docs/tempo/latest/set-up-for-tracing/setup-tempo/deploy/
+#
+# - Monolithic (-target=all, mặc định của image): distributor đẩy thẳng vào live-store trong tiến trình, không Kafka.
+#   Lệch có chủ đích: backend `local` trên PVC thay vì object storage (Tempo khuyên object storage cho production);
+#   một bản, không HA (observability.md "Lệch chuẩn có chủ đích").
+# - Wave 7: sau kube-prometheus-stack (6), app tạo namespace observability.
+# - Không route ra edge: chỉ Grafana (trong cụm) và Collector (bước 3) gọi Service tempo.
+# - Receiver jaeger, zipkin của chart giữ mặc định (mức tối thiểu): chỉ nghe trong pod/Service nội bộ. Bỏ được bằng
+#   `jaeger: null`, nhưng null trong valuesObject bị mất khi lưu Application (gitops-argocd.md, G0-05).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tempo
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  sources:
+    # NÂNG CẤP: đổi cùng commit targetRevision và tempo.tag (digest thắng appVersion của chart: quên đổi là chart mới
+    # chạy Tempo cũ). Đọc CHANGELOG chart và release notes Tempo trước khi push.
+    # Digest gói chart (index.yaml, khớp sha256 của tempo-3.2.1.tgz): sha256 3389c896bd3c8f2a54f054ac00eb1881c34eff2b8e53053e3ad42c9f394925c3
+    - repoURL: https://grafana-community.github.io/helm-charts
+      chart: tempo
+      targetRevision: 3.2.1
+      helm:
+        releaseName: tempo
+        valuesObject:
+          # Tên object cố định "tempo" (Service tempo.observability.svc): Collector và datasource Grafana trỏ vào tên này.
+          fullnameOverride: tempo
+          tempo:
+            # Digest của image index đa kiến trúc (helm-chart.md "Image tham chiếu theo digest"). Chart ghép
+            # registry/repository:tag nên digest đi trong tag; nhãn app.kubernetes.io/version tự cắt phần @sha.
+            tag: 3.1.1@sha256:64e2fbd56d9c2b3412a4b430a58ea59e91a670b1e75f920a0c702213ad145044
+            # Mặc định true: gửi số liệu sử dụng ẩn danh về Grafana Labs. Lab không gửi gì ra Internet.
+            reportingEnabled: false
+            # N14: trace 7 ngày. Chart render vào backend_worker.compaction.block_retention (nơi Tempo thực thi xóa) và
+            # backend_scheduler.provider.compaction.compaction.block_retention. Mặc định chart 24h.
+            retention: 168h
+            # Ngân sách ticket 04: Tempo 512 Mi (ước lượng, chưa đo), request = limit, không CPU limit (tránh throttling).
+            # Giữ 512 tới bước 8: đo RSS lúc khởi động, nhận trace, query rồi chốt ~1,3 × đỉnh.
+            resources:
+              requests:
+                cpu: 50m
+                memory: 512Mi
+              limits:
+                memory: 512Mi
+            # Tempo viết bằng Go: GOMEMLIMIT ~90% limit để GC dọn trước khi chạm trần cgroup (gitops-argocd.md). Đổi
+            # CÙNG lúc với limits.memory.
+            extraEnv:
+              - name: GOMEMLIMIT
+                value: 460MiB
+          # WAL (/var/tempo/wal) và block (/var/tempo/traces) trên PVC: pod restart không mất trace. PVC sinh từ
+          # volumeClaimTemplates (storage-tempo-0), StatefulSet controller tạo, không phải Argo CD; mặc định K8s giữ PVC khi
+          # xóa StatefulSet (whenDeleted: Retain), nên xóa nhầm app không mất dữ liệu. Không bật
+          # enableStatefulSetAutoDeletePVC.
+          persistence:
+            enabled: true
+            storageClassName: local-path
+            # local-path không ép dung lượng: số này chỉ là nhãn. Trace telemetrygen/hello 7 ngày cỡ vài trăm MB.
+            size: 5Gi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
