@@ -2,26 +2,57 @@
   "uid": "cardinality",
   "title": "Cardinality",
   "description": "Ngân sách series của Prometheus (G0-13). Chuẩn: docs/standards/observability.md mục \"Metric: tên, nhãn, cardinality\". Dashboard dạng code: sửa ở gitops/infra/kube-prometheus-stack/dashboards/cardinality.json, không sửa trên UI.",
-  "tags": ["commerce-hub", "prometheus", "cardinality"],
+  "tags": [
+    "commerce-hub",
+    "prometheus",
+    "cardinality"
+  ],
+  "links": [
+    {
+      "title": "Runbook: vượt ngân sách series",
+      "type": "link",
+      "icon": "doc",
+      "targetBlank": true,
+      "url": "https://github.com/hoangduoc0603/commerce-hub-docs/blob/main/runbooks/series-budget.md"
+    }
+  ],
   "editable": false,
   "schemaVersion": 39,
-  "time": { "from": "now-24h", "to": "now" },
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
   "refresh": "1m",
   "timezone": "browser",
-  "templating": { "list": [] },
-  "annotations": { "list": [] },
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
   "panels": [
     {
       "id": 1,
       "type": "stat",
       "title": "Series trong head",
       "description": "prometheus_tsdb_head_series: số series đang giữ trong bộ nhớ (2 giờ gần nhất). RAM của Prometheus tăng gần tuyến tính theo số này. Vàng từ 80% ngân sách, đỏ từ 200 000.",
-      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "prometheus_tsdb_head_series{job=\"kube-prometheus-stack-prometheus\"}",
           "instant": true,
           "range": false
@@ -34,16 +65,31 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 160000 },
-              { "color": "red", "value": 200000 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 160000
+              },
+              {
+                "color": "red",
+                "value": 200000
+              }
             ]
           }
         },
         "overrides": []
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "colorMode": "background",
         "graphMode": "none",
         "textMode": "value"
@@ -53,12 +99,23 @@
       "id": 2,
       "type": "gauge",
       "title": "% ngân sách 200 000",
-      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "prometheus_tsdb_head_series{job=\"kube-prometheus-stack-prometheus\"} / 200000",
           "instant": true,
           "range": false
@@ -73,16 +130,31 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 0.8 },
-              { "color": "red", "value": 1 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.8
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
             ]
           }
         },
         "overrides": []
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "showThresholdMarkers": true
       }
     },
@@ -91,12 +163,23 @@
       "type": "stat",
       "title": "Series mang nhãn bị cấm",
       "description": "Số series có nhãn workspace_id, shop_id, order_id, sku_id, user_id hoặc trace_id. Các giá trị này không giới hạn, chỉ được vào trace (highCardinalityKeyValue), không vào metric. Phải luôn bằng 0.",
-      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "(count({workspace_id!=\"\"}) or vector(0)) + (count({shop_id!=\"\"}) or vector(0)) + (count({order_id!=\"\"}) or vector(0)) + (count({sku_id!=\"\"}) or vector(0)) + (count({user_id!=\"\"}) or vector(0)) + (count({trace_id!=\"\"}) or vector(0))",
           "instant": true,
           "range": false
@@ -109,15 +192,27 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "red", "value": 1 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
             ]
           }
         },
         "overrides": []
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "colorMode": "background",
         "graphMode": "none",
         "textMode": "value"
@@ -128,12 +223,23 @@
       "type": "stat",
       "title": "Series mới tạo mỗi phút",
       "description": "Churn: rate(prometheus_tsdb_head_series_created_total). Tăng vọt khi có nhãn đổi giá trị liên tục (ID, timestamp, tên pod sau mỗi lần rollout).",
-      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "rate(prometheus_tsdb_head_series_created_total{job=\"kube-prometheus-stack-prometheus\"}[5m]) * 60",
           "instant": true,
           "range": false
@@ -145,13 +251,24 @@
           "decimals": 0,
           "thresholds": {
             "mode": "absolute",
-            "steps": [{ "color": "blue", "value": null }]
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
           }
         },
         "overrides": []
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "colorMode": "value",
         "graphMode": "area",
         "textMode": "value"
@@ -162,12 +279,23 @@
       "type": "timeseries",
       "title": "Series trong head theo thời gian",
       "description": "Đường đỏ nét đứt là ngân sách 200 000.",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "prometheus_tsdb_head_series{job=\"kube-prometheus-stack-prometheus\"}",
           "legendFormat": "head series"
         }
@@ -180,21 +308,36 @@
             "drawStyle": "line",
             "lineWidth": 2,
             "fillOpacity": 10,
-            "thresholdsStyle": { "mode": "dashed" }
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
           },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "transparent", "value": null },
-              { "color": "red", "value": 200000 }
+              {
+                "color": "transparent",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 200000
+              }
             ]
           }
         },
         "overrides": []
       },
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
-        "tooltip": { "mode": "single", "sort": "none" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
       }
     },
     {
@@ -202,12 +345,23 @@
       "type": "timeseries",
       "title": "Series theo job",
       "description": "Recording rule job:scrape_samples_post_metric_relabeling:sum (PrometheusRule series-budget): số sample mỗi lần scrape sau relabel, xấp xỉ số series job đó đóng góp.",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "job:scrape_samples_post_metric_relabeling:sum",
           "legendFormat": "{{job}}"
         }
@@ -220,14 +374,29 @@
             "drawStyle": "line",
             "lineWidth": 1,
             "fillOpacity": 60,
-            "stacking": { "mode": "normal", "group": "A" }
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
           }
         },
         "overrides": []
       },
       "options": {
-        "legend": { "displayMode": "table", "placement": "right", "showLegend": true, "calcs": ["lastNotNull"], "sortBy": "Last *", "sortDesc": true },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "sortBy": "Last *",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       }
     },
     {
@@ -235,12 +404,23 @@
       "type": "bargauge",
       "title": "Series theo namespace (hiện tại)",
       "description": "Recording rule namespace:scrape_samples_post_metric_relabeling:sum. Ngân sách mỗi pod service: 5 000 series.",
-      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 13 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 13
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "sort_desc(namespace:scrape_samples_post_metric_relabeling:sum)",
           "legendFormat": "{{namespace}}",
           "instant": true,
@@ -252,12 +432,20 @@
           "unit": "short",
           "min": 0,
           "decimals": 0,
-          "color": { "mode": "continuous-BlYlRd" }
+          "color": {
+            "mode": "continuous-BlYlRd"
+          }
         },
         "overrides": []
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "orientation": "horizontal",
         "displayMode": "gradient",
         "showUnfilled": true
@@ -268,12 +456,23 @@
       "type": "table",
       "title": "Top 10 metric nhiều series nhất",
       "description": "topk(10, count by (__name__) (...)). Cách tìm metric gây nổ series đầu tiên trong runbook series-budget.",
-      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 13 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 13
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "topk(10, count by (__name__) ({__name__=~\".+\"}))",
           "format": "table",
           "instant": true,
@@ -281,17 +480,61 @@
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "short", "decimals": 0 },
+        "defaults": {
+          "unit": "short",
+          "decimals": 0
+        },
         "overrides": [
-          { "matcher": { "id": "byName", "options": "__name__" }, "properties": [{ "id": "displayName", "value": "Metric" }] },
-          { "matcher": { "id": "byName", "options": "Value" }, "properties": [{ "id": "displayName", "value": "Series" }] }
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "__name__"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Metric"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Series"
+              }
+            ]
+          }
         ]
       },
       "transformations": [
-        { "id": "organize", "options": { "excludeByName": { "Time": true } } },
-        { "id": "sortBy", "options": { "sort": [{ "field": "Value", "desc": true }] } }
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Value",
+                "desc": true
+              }
+            ]
+          }
+        }
       ],
-      "options": { "showHeader": true }
+      "options": {
+        "showHeader": true
+      }
     }
   ]
 }
