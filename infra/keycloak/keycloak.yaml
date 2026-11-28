@@ -65,8 +65,11 @@ spec:
   # Cổng 8080 (HTTP) chỉ nhận từ pod Envoy của Gateway edge và pod trong namespace keycloak; trước đó operator để mở cho
   # mọi nguồn (luật không có `from`): đo 2026-11-27, pod ở namespace default đọc được /realms/master qua
   # keycloak-service:8080 (200), tức vượt route của edge và vượt ClientTrafficPolicy (G0-10 bước 7).
-  # Cổng 9000 (management): giữ mặc định tới ticket 13 (chỉ namespace observability). JGroups 7800: operator tự giới hạn.
-  # kubectl port-forward không đi qua NetworkPolicy.
+  # Cổng 9000 (management: /metrics, /health) chỉ nhận từ namespace observability (Prometheus scrape qua ServiceMonitor do
+  # operator tạo); trước đó mở cho mọi pod: đo 2026-11-28, pod ở default đọc được /metrics (200) (G0-13 bước 7).
+  # Probe của kubelet trên 9000 đi từ chính node chứa pod, không từ pod khác; Calico không áp NetworkPolicy lên traffic đó
+  # (kiểm 2026-11-28: keycloak-0 vẫn Ready, 0 restart sau khi đặt luật).
+  # JGroups 7800: operator tự giới hạn. kubectl port-forward không đi qua NetworkPolicy.
   networkPolicy:
     enabled: true
     http:
@@ -81,6 +84,12 @@ spec:
       # Pod cùng namespace keycloak: Job keycloak-config-cli (ticket 11) gọi admin API qua keycloak-service:8080, vì admin
       # API không mở qua edge. Service nào cần jwk-set-uri nội bộ thì thêm namespace của nó ở đây.
       - podSelector: {}
+    management:
+      # Cả namespace observability (không thu hẹp tới pod Prometheus): nhãn pod do operator Prometheus đặt, đổi tên
+      # release là mất scrape mà không có lỗi nào. Namespace observability chỉ chứa thành phần quan sát do platform quản.
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: observability
 
   additionalOptions:
     # Chỉ đọc X-Forwarded-* khi kết nối đến từ dải pod (IP pool default-ipv4-ippool của Calico). IP pod Envoy thay đổi nên
