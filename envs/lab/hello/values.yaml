@@ -4,6 +4,7 @@
 # sửa hai dòng này; đừng đổi cấu trúc hai key mà job đó tìm.
 # G0-27: thêm DB (pg-main): bản sao mật khẩu hello_app, hello_migrator dạng SealedSecret, runtime qua Pooler, Job migrate.
 # G0-29: issuer và JWKS của realm commerce-hub (env), thêm TRƯỚC khi merge image có resource server.
+# G0-30: gửi span tới Collector (env), ServiceMonitor, deployment.environment.name; thêm TRƯỚC khi merge image bật export.
 image:
   repository: ghcr.io/hoangduoc0603/commerce-hub-hello
   digest: sha256:ac9c4ca51bafdfa3a2bd6eb1d81b9645b51a3abe40ee6e8b604669649ff16840
@@ -34,12 +35,26 @@ env:
   # JWKS đi qua Gateway edge bằng HTTPS (truststore của chart), không đi địa chỉ nội bộ http://keycloak-service...:
   # lệch keycloak.md có chủ đích, lý do ở Q1 ticket G0-29 (tiêu chí PKIX cần HTTPS; khỏi mở NetworkPolicy của Keycloak).
   SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI: "https://auth.lab.internal/realms/commerce-hub/protocol/openid-connect/certs"
+  # Span qua OTLP HTTP tới Collector (G0-30). Service có internalTrafficPolicy: Local nên luôn vào Collector cùng node (G0-14);
+  # Collector của node đó đang rollout thì request rơi và SDK thử lại. Thiếu biến này thì app không tạo exporter, span
+  # không đi đâu và không có log báo (observability.md). Dùng property của Boot, không dùng OTEL_EXPORTER_OTLP_*
+  # (observability.md: chart không đặt OTEL_* ngoài biến chủ ý).
+  MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: "http://otel-collector.observability.svc:4318/v1/traces"
 
 # Ngoại lệ chỉ có ở G0: hello mở qua edge. Từ G1 chỉ seller-web, Keycloak, simulator ra ngoài.
 httpRoute:
   enabled: true
   hostnames:
     - hello.lab.internal
+
+# Prometheus scrape /actuator/prometheus trên cổng management (chart app 0.4.0, G0-30). Chu kỳ theo Prometheus (30 s).
+serviceMonitor:
+  enabled: true
+
+# Thêm vào OTEL_RESOURCE_ATTRIBUTES của pod; service.version chart tự lấy từ image.tag (G0-30).
+otel:
+  resourceAttributes:
+    deployment.environment.name: "lab"
 
 # Tăng 1 trong cùng commit đổi sealedSecrets (chart app: annotation pod, để pod đọc Secret mới).
 secretRevision: 1
