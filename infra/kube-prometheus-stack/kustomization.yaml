@@ -51,3 +51,21 @@ patches:
         name: any
         annotations:
           argocd.argoproj.io/sync-options: Prune=false,Delete=false
+# Dashboard dạng code (G0-13 bước 6). Sidecar grafana-sc-dashboard theo dõi ConfigMap mang nhãn grafana_dashboard=1 trong
+# observability, ghi từng key thành file /tmp/dashboards/<key> rồi gọi API reload provisioning của Grafana. Provider của
+# kube-prometheus-stack đặt allowUiUpdates: false: dashboard từ file không lưu được trên UI. Grafana không có PVC, nên
+# bản "Save as" trên UI mất khi pod khởi động lại; nguồn duy nhất là file JSON ở đây.
+# Cách sửa: dựng hoặc sửa trên UI cho tiện, Export → "Export as JSON" (bỏ chọn "Export for sharing externally"), chép đè
+# file trong dashboards/, giữ uid.
+configMapGenerator:
+  - name: grafana-dashboard-cardinality
+    namespace: observability
+    files:
+      - dashboards/cardinality.json
+    options:
+      labels:
+        grafana_dashboard: "1"
+      # Tắt hậu tố hash: đổi JSON thì Argo CD tạo ConfigMap tên mới rồi mới prune cái cũ. Hai ConfigMap cùng key
+      # cardinality.json, nên sự kiện DELETED của cái cũ làm sidecar XÓA file vừa ghi, dashboard biến mất. Sidecar tự
+      # thấy nội dung đổi, không cần đổi tên để kéo rollout.
+      disableNameSuffixHash: true
