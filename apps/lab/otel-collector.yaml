@@ -60,6 +60,37 @@ spec:
                     endpoint: ${env:MY_POD_IP}:4317
                   http:
                     endpoint: ${env:MY_POD_IP}:4318
+              # Receiver file_log do preset logsCollection sinh (include, exclude, start_at, storage). Ở đây chỉ ghi đè
+              # `operators` (bước 6): chart trộn alternateConfig đè lên cấu hình preset, và list bị THAY CẢ, không nối
+              # thêm, nên phải chép lại parser `container` của preset làm phần tử đầu. NÂNG CẤP chart: so lại operator
+              # này với templates/_config.tpl (logsCollectionConfig).
+              file_log:
+                operators:
+                  # Như preset: tách định dạng CRI (thời gian, stream, ghép dòng bị cắt), lấy k8s.* từ đường dẫn file.
+                  - type: container
+                    id: container-parser
+                    max_log_size: 102400
+                  # Log JSON của service (Spring Boot `logging.structured.format.console: ecs`, observability.md): parse
+                  # vào trường tạm, đưa traceId/spanId (khóa MDC của Micrometer Tracing) vào trường trace của log record;
+                  # Loki lưu thành structured metadata trace_id, span_id. Dòng không phải JSON bỏ qua nhờ `if`; JSON hỏng
+                  # gửi nguyên dòng, không ghi log lỗi (send_quiet). Dòng JSON không có traceId vẫn đi bình thường.
+                  - type: json_parser
+                    id: json-parser
+                    if: 'body matches "^\\s*\\{"'
+                    parse_from: body
+                    parse_to: attributes.json
+                    on_error: send_quiet
+                    trace:
+                      trace_id:
+                        parse_from: attributes.json.traceId
+                      span_id:
+                        parse_from: attributes.json.spanId
+                  # Body giữ nguyên dòng JSON (LogQL `| json` đọc được mọi trường). Bỏ bản parse tạm để không nhân đôi
+                  # dữ liệu thành structured metadata.
+                  - type: remove
+                    id: drop-parsed-json
+                    if: 'attributes.json != nil'
+                    field: attributes.json
             processors:
               # Phải đứng đầu pipeline. Soft limit = 80% − 25% = 55% limit (≈105 Mi): từ chối dữ liệu mới, app thử lại.
               # Hard limit 80%: ép GC. Tính theo limit của container (cgroup).
